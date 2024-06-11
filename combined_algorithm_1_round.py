@@ -4,7 +4,7 @@ import itertools
 import tqdm
 
 
-def agent_update(prev_not_i_strategies, S_i, alpha_i, delta, M, responder= False):
+def agent_update(prev_not_i_strategies, S_i, alpha_i, M, responder= False):
 
     utility_feedback_vector = [0.0 for s in S_i]
 
@@ -13,18 +13,15 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, delta, M, responder= False
         for w_f in prev_not_i_strategies:
             for j, s_c in enumerate(S_i):
                 for k, w_f_supp in enumerate(S_i):
-                    if w_f_supp[0] >= s_c[0]:
-                        utility_feedback_vector[j] += w_f[k] *  w_f_supp[0]
-                    elif s_c[1] >= w_f_supp[1]:
-                        utility_feedback_vector[j] += w_f[k] * delta *(1-s_c[1])
+                    if w_f_supp >= s_c:
+                        utility_feedback_vector[j] += w_f[k] *  w_f_supp
     else: # firm
         for w_c in prev_not_i_strategies:
             for j, s_f in enumerate(S_i):
                 for k, w_c_supp in enumerate(S_i):
-                    if w_c_supp[0] <= s_f[0]:
-                        utility_feedback_vector[j] += w_c[k] *  (1-s_f[0])
-                    elif s_f[1] <= w_c_supp[1]:
-                        utility_feedback_vector[j] += w_c[k] * delta *(w_c_supp[1])
+                    if w_c_supp <= s_f:
+                        print(f"w_c_supp: {w_c_supp}, w_c[k]: {w_c[k]}")
+                        utility_feedback_vector[j] += w_c[k] *  (1-s_f)
     
 
     w_var = cp.Variable(len(S_i))
@@ -34,12 +31,18 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, delta, M, responder= False
 
     problem.solve()
 
-    w_t_p_1 = []
+    w_t_p_1_all = []
     for w_p in w_var:
         probability = max(0.0,round(w_p.value,5))
-        w_t_p_1.append(probability)
-
+        w_t_p_1_all.append(probability)
     
+    # keep largest non-zero support
+    largest = 0
+    for i, w_supp in enumerate(w_t_p_1_all):
+        if w_supp >0:
+            largest = i
+
+    w_t_p_1 = [1 if i == largest else 0 for i in range(len(w_t_p_1_all))]    
     return w_t_p_1
 
 
@@ -64,12 +67,11 @@ def get_support(w_i,S_i):
 
 if __name__ == "__main__":
 
-    T = 50 # time steps
-    M = 100.0 # regularizer constant
-    delta = 0.9 # time discount factor
+    T = 100 # time steps
+    M = 10001.0 # regularizer constant
 
-    S_f = list(itertools.product([i/T for i in range(T+1)],[i/T for i in range(T+1)]))
-    S_c = list(itertools.product([i/T for i in range(T+1)],[i/T for i in range(T+1)]))
+    S_f = [i/T for i in range(T+1)]
+    S_c = [i/T for i in range(T+1)]
 
     beta_f_idx = np.random.randint(len(S_f))
     beta_c_idx = np.random.randint(len(S_c))
@@ -86,8 +88,8 @@ if __name__ == "__main__":
 
     for t in tqdm.tqdm(range(T)):
 
-        w_f_t_p_1 = agent_update(prev_c,S_i=S_f,alpha_i=alpha_f,delta=delta, M=M)
-        w_c_t_p_1 = agent_update(prev_f,S_i=S_c,alpha_i=alpha_c,delta=delta, M=M, responder=True)
+        w_f_t_p_1 = agent_update(prev_c,S_i=S_f,alpha_i=alpha_f, M=M)
+        w_c_t_p_1 = agent_update(prev_f,S_i=S_c,alpha_i=alpha_c, M=M, responder=True)
 
         print(f"w_f_t_p_1 support: {get_support(w_f_t_p_1, S_f)}")
         print(f"w_c_t_p_1 support: {get_support(w_c_t_p_1, S_c)}")
