@@ -20,7 +20,6 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, responder= False):
             for j, s_f in enumerate(S_i):
                 for k, w_c_supp in enumerate(S_i):
                     if w_c_supp <= s_f:
-                        print(f"w_c_supp: {w_c_supp}, w_c[k]: {w_c[k]}")
                         utility_feedback_vector[j] += w_c[k] *  (1-s_f)
     
 
@@ -73,10 +72,10 @@ if __name__ == "__main__":
     S_f = [i/T for i in range(T+1)]
     S_c = [i/T for i in range(T+1)]
 
-    beta_f_idx = np.random.randint(len(S_f))
-    beta_c_idx = np.random.randint(len(S_c))
-    alpha_f_idx = np.random.randint(len(S_f))
-    alpha_c_idx = np.random.randint(len(S_c))
+    beta_f_idx = 70#np.random.randint(len(S_f))
+    beta_c_idx = 30#np.random.randint(len(S_c))
+    alpha_f_idx = 40# np.random.randint(len(S_f))
+    alpha_c_idx = 75#np.random.randint(len(S_c))
 
     beta_f = [1 if i == beta_f_idx else 0 for i in range(len(S_f))]
     beta_c = [1 if i == beta_c_idx else 0 for i in range(len(S_c))]
