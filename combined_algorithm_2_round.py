@@ -34,12 +34,18 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, delta, M, responder= False
 
     problem.solve()
 
-    w_t_p_1 = []
+    w_t_p_1_all = []
     for w_p in w_var:
         probability = max(0.0,round(w_p.value,5))
-        w_t_p_1.append(probability)
-
+        w_t_p_1_all.append(probability)
     
+    # keep largest non-zero support
+    largest = 0
+    for i, w_supp in enumerate(w_t_p_1_all):
+        if w_supp > 0:
+            largest = i
+
+    w_t_p_1 = [1 if i == largest else 0 for i in range(len(w_t_p_1_all))]    
     return w_t_p_1
 
 
