@@ -71,8 +71,8 @@ def get_support(w_i,S_i):
 if __name__ == "__main__":
 
     T = 50 # time steps
-    M = 100.0 # regularizer constant
-    delta = 0.9 # time discount factor
+    M = 1000.0 # regularizer constant
+    delta = 0.95 # time discount factor
 
     S_f = list(itertools.product([i/T for i in range(T+1)],[i/T for i in range(T+1)]))
     S_c = list(itertools.product([i/T for i in range(T+1)],[i/T for i in range(T+1)]))
