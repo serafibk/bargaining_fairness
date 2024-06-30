@@ -1,10 +1,10 @@
 NE_1_no_tie_break: just wanted to see what strategies where chosen without the tie break mechanism -- seems to be all uniform distributions over actions that result in the same utility.
-NE_2_tie_break:
+NE_2_tie_break: (BOTH FIRST ROUND)
 - each chose reference point after first round 
 - after that the responder saw a better deal in the second round, so switched to that strategy
 - proposer preferred the first round, so changed their second threshold to 1
 - then they agreed in the first round and it is in NE, so they stay there
-NE_3_tie_break:
+NE_3_tie_break: (Proposer 2nd round (REF) Responder 1st round(REF))
 - each chose reference point after first round
 - responder saw they could do better in second round after that, so set a higher threshold in round 1 and lower offer in round 2
 - oppositely, proposer saw they could do better in first round and set a matching offer in the first round and raised their second round threshold
@@ -14,28 +14,28 @@ NE_3_tie_break:
 - responder notices and raises their acceptance threshold to take advantage of this
 - propsoer moves second round threshold back up and meets the responder's first round threshold 
 - now they agree in the first round and each can't do better in the second round, so NE!
-NE_4_tie_break:
+NE_4_tie_break: (Proposer 2nd round (REF) Responder 1st round)
 - proposer chooses reference point, responder chooses proposer's first deal (probably influenced by tie break mechanism)
 - responder lowers threshold to get first round 
 - proposer prefers second round, so keeps lowering offer to get the second round deal
 - responder follows by lowering their threshold eventually changes their second round offer when first round deal becomes worse than making a second round deal
 - responder holds their first round threshold and eventually proposer raises offer to meet this since they do slightly worse in the second round eventually
 - now they agree in the first round and each can't do better in the second round so NE
-NE_5_tie_break:
+NE_5_tie_break: (Proposer 2nd round Responder 1st round (REF))
 - responder chooses reference point, proposer chooses responder's point but with a preference for the second round by making a slightly lower offer
 - tie break mechanism causes responder to choose a high offer in the second round when switching their first round to match proposer
 - this gives incentive for the proposer to lower their first round deal
 - responder keeps following by lowering their threshold until responder would do worse in the first round
 - proposer eventually matches responder's first round thershold since the second round eventually does slightly worse for them
 - now they agree in the first round and can't do better in the second round and we have NE!
-NE_6_tie_break:
+NE_6_tie_break: (BOTH FIRST ROUND)
 - each chooose each other's first point and high second round due to tie break mechanism
 - responder matches proposer since second round is obviously worse
 - proposer chooses reference point since second round is much better and reference point supports this
 - responder takes advantage of lowered second round threshold
 - proposer moves thresold back up and matches responder since now they're doing worse in the second round
 - now they agree in the first round and can't do better in the second so NE
-NE_7_tie_break:
+NE_7_tie_break: (BOTH SECOND ROUND)
 - each choose each other's first point with a preference for the second round for each
 - responder moves to reference point, proposer lowers threshold to get second round deal (previously getting nothing)
 - proposer matches low offer in first round to take advantage of responder
@@ -44,3 +44,6 @@ NE_7_tie_break:
 - they agree in the second round too, so NE is reached
 not_quite_nash:
 - same lowering and following behavior, eventually proposer will raise offer to match the first round threshold is my guess since eventually second round will be slightly worse
+
+NE_8_tie_break: (Proposer 2nd round Responder 1st round)
+NE_9_tie_break: (BOTH FIRST ROUND) -- but they end up in the second round deal...

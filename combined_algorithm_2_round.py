@@ -90,7 +90,7 @@ if __name__ == "__main__":
     prev_f = [beta_f]
     prev_c = [beta_c]
 
-    for t in tqdm.tqdm(range(T)):
+    for t in tqdm.tqdm(range(int(T/10))):
 
         w_f_t_p_1 = agent_update(prev_c,S_i=S_f,alpha_i=alpha_f,delta=delta, M=M)
         w_c_t_p_1 = agent_update(prev_f,S_i=S_c,alpha_i=alpha_c,delta=delta, M=M, responder=True)
