@@ -43,6 +43,7 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, delta, M, responder= False
     largest = 0
     for i, w_supp in enumerate(w_t_p_1_all):
         if w_supp > 0:
+            # print(S_i[i])
             largest = i
 
     w_t_p_1 = [1 if i == largest else 0 for i in range(len(w_t_p_1_all))]    
@@ -72,15 +73,19 @@ if __name__ == "__main__":
 
     T = 50 # time steps
     M = 1000.0 # regularizer constant
-    delta = 0.95 # time discount factor
+    delta = 0.9 # time discount factor
 
     S_f = list(itertools.product([i/T for i in range(T+1)],[i/T for i in range(T+1)]))
     S_c = list(itertools.product([i/T for i in range(T+1)],[i/T for i in range(T+1)]))
 
-    beta_f_idx = np.random.randint(len(S_f))
-    beta_c_idx = np.random.randint(len(S_c))
-    alpha_f_idx = np.random.randint(len(S_f))
-    alpha_c_idx = np.random.randint(len(S_c))
+    def choose_supp_idx(s_1,s_2, S_i):
+        return S_i.index((s_1,s_2))
+    
+
+    beta_f_idx = choose_supp_idx(0.56,0.88,S_f)#np.random.randint(len(S_f))
+    beta_c_idx = choose_supp_idx(0.54,0.88,S_c)#np.random.randint(len(S_c))
+    alpha_f_idx = choose_supp_idx(0.1,0.64,S_f)#np.random.randint(len(S_f))
+    alpha_c_idx = choose_supp_idx(0.72,0.66,S_c)#np.random.randint(len(S_c))
 
     beta_f = [1 if i == beta_f_idx else 0 for i in range(len(S_f))]
     beta_c = [1 if i == beta_c_idx else 0 for i in range(len(S_c))]
@@ -90,7 +95,7 @@ if __name__ == "__main__":
     prev_f = [beta_f]
     prev_c = [beta_c]
 
-    for t in tqdm.tqdm(range(int(T/10))):
+    for t in tqdm.tqdm(range(int(T/5))):
 
         w_f_t_p_1 = agent_update(prev_c,S_i=S_f,alpha_i=alpha_f,delta=delta, M=M)
         w_c_t_p_1 = agent_update(prev_f,S_i=S_c,alpha_i=alpha_c,delta=delta, M=M, responder=True)

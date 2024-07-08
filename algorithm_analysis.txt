@@ -1,5 +1,5 @@
 NE_1_no_tie_break: just wanted to see what strategies where chosen without the tie break mechanism -- seems to be all uniform distributions over actions that result in the same utility.
-NE_2_tie_break: (BOTH FIRST ROUND)
+NE_2_tie_break: (BOTH FIRST ROUND (ref for both))
 - each chose reference point after first round 
 - after that the responder saw a better deal in the second round, so switched to that strategy
 - proposer preferred the first round, so changed their second threshold to 1
