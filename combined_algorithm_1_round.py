@@ -24,7 +24,7 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, responder= False):
     
 
     w_var = cp.Variable(len(S_i))
-    objective = cp.Maximize(w_var@utility_feedback_vector - cp.norm(w_var-alpha_i, 1)/cp.sqrt(M))
+    objective = cp.Maximize(w_var@utility_feedback_vector - cp.norm(w_var-alpha_i, 2)**2/2*M)
     constraints = [cp.sum(w_var)==1, cp.min(w_var)>=0]
     problem = cp.Problem(objective,constraints)
 
@@ -34,15 +34,18 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, responder= False):
     for w_p in w_var:
         probability = max(0.0,round(w_p.value,5))
         w_t_p_1_all.append(probability)
+    # print(w_t_p_1_all)
     
     # keep largest non-zero support
-    largest = 0
-    for i, w_supp in enumerate(w_t_p_1_all):
-        if w_supp >0:
-            largest = i
+    # largest = 0
+    # for i, w_supp in enumerate(w_t_p_1_all):
+    #     if w_supp >0:
+    #         w_supp_prev = w_supp
+    #         largest = i
 
-    w_t_p_1 = [1 if i == largest else 0 for i in range(len(w_t_p_1_all))]    
-    return w_t_p_1
+
+    # w_t_p_1_all = [1 if i == largest else 0 for i in range(len(w_t_p_1_all))]    
+    return w_t_p_1_all
 
 
 
@@ -67,15 +70,15 @@ def get_support(w_i,S_i):
 if __name__ == "__main__":
 
     T = 100 # time steps
-    M = 10001.0 # regularizer constant
+    M = 1/np.sqrt(T) # regularizer constant
 
     S_f = [i/T for i in range(T+1)]
     S_c = [i/T for i in range(T+1)]
 
-    beta_f_idx = 70#np.random.randint(len(S_f))
-    beta_c_idx = 30#np.random.randint(len(S_c))
-    alpha_f_idx = 40# np.random.randint(len(S_f))
-    alpha_c_idx = 75#np.random.randint(len(S_c))
+    beta_f_idx = np.random.randint(len(S_f))
+    beta_c_idx = np.random.randint(len(S_c))
+    alpha_f_idx =  np.random.randint(len(S_f))
+    alpha_c_idx = np.random.randint(len(S_c))
 
     beta_f = [1 if i == beta_f_idx else 0 for i in range(len(S_f))]
     beta_c = [1 if i == beta_c_idx else 0 for i in range(len(S_c))]
