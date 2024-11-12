@@ -93,8 +93,8 @@ if __name__ == "__main__":
         w_f_t_p_1 = agent_update(prev_c,S_i=S_f,alpha_i=alpha_f, M=M)
         w_c_t_p_1 = agent_update(prev_f,S_i=S_c,alpha_i=alpha_c, M=M, responder=True)
 
-        print(f"w_f_t_p_1 support: {get_support(w_f_t_p_1, S_f)}")
-        print(f"w_c_t_p_1 support: {get_support(w_c_t_p_1, S_c)}")
+        # print(f"w_f_t_p_1 support: {get_support(w_f_t_p_1, S_f)}")
+        # print(f"w_c_t_p_1 support: {get_support(w_c_t_p_1, S_c)}")
 
         prev_f.append(w_f_t_p_1)
         prev_c.append(w_c_t_p_1) 
