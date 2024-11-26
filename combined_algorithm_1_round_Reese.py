@@ -5,8 +5,13 @@ import tqdm
 import matplotlib.pyplot as plt
 
 
-# return -1 or highest index
+# returns -1 or optimal index for pure strat 
+    # Optimal = highest for responder (C), lowest for proposer (F)
 def tie_breaker(util, obj_min_strat, responder):
+    # Only forces pure strategy if 
+    # 1. There are multiple indices with max utility
+    # 2. The indices have equal, maximum probability in obj strategy space
+
     # identify all indices with the maximum utility
     max_util = max(util)
     tied_util = [ind for ind, ele in enumerate(util) if ele == max_util]
@@ -38,11 +43,9 @@ def tie_breaker(util, obj_min_strat, responder):
             # For the firm, select the lowest index
             return max(tied_util) if responder else min(tied_util)
         elif responder: # tied ind with highest prob do not match ind with highest utility
-            return max(tied_p) if max(tied_util) < max(tied_p) else max(tied_util)
+            return None if max(tied_util) < max(tied_p) else max(tied_util)
         elif not responder:
-            return min(tied_p) if min(tied_util) > min(tied_p) else min(tied_util)
-        # Reese Note: is this ok? I'm afraid I may be artificially overriding the
-            # obj function's probability assignment in the last two cases
+            return None if min(tied_util) > min(tied_p) else min(tied_util)
 
     return None
 
