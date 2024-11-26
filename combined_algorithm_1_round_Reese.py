@@ -75,7 +75,7 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, regularizer="euclidean"
         objective = cp.Maximize(w_var@utility_feedback_vector + 1/M * cp.sum(cp.entr(w_var)))
     else:
         # Euclidean regularizer (default)
-        objective = cp.Maximize(w_var@utility_feedback_vector - cp.norm(w_var-alpha_i, 2)**2/2*M)
+        objective = cp.Maximize(w_var@utility_feedback_vector - cp.norm(w_var-alpha_i, 2)**2/(2*M))
 
     constraints = [cp.sum(w_var)==1, cp.min(w_var)>=0.0]
     problem = cp.Problem(objective,constraints)
@@ -85,6 +85,7 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, regularizer="euclidean"
     
     # TIE BREAK
     # Note: If reference point is not 0, must handle accordingly.
+    # opt_index = None
     opt_index = tie_breaker(utility_feedback_vector, obj_min_strat, responder)
     
     # set pure: 1 = max index prob in strat if need be
@@ -221,8 +222,8 @@ def print_final_convergence(w_f_t_p_1, w_c_t_p_1, S_f, S_c):
     print(get_support(w_c_t_p_1, S_c))
 
 if __name__ == "__main__":
-    T = 100  # time steps
-    M = 1 / np.sqrt(T)  # regularizer constant
+    T = 200  # time steps
+    M = 1 / (T**(1/4.0))  # regularizer constant
     strategy = None
     reference = None
     S_f = [i / (T) for i in range(T + 1)]
@@ -231,7 +232,7 @@ if __name__ == "__main__":
     all_runs_results = []
     purity_threshold = 5e-7
     # Run multiple simulation
-    num_runs = 10
+    num_runs = 2
     pure_count = 0
     ne_convergence_data = []
     for _ in range(num_runs):
@@ -242,6 +243,8 @@ if __name__ == "__main__":
         firm_offer = S_f[np.argmax(run_results[0][-1])] 
         candidate_offer = S_c[np.argmax(run_results[1][-1])]
         offer_gap = firm_offer-candidate_offer
+        print("Firm offer = ", firm_offer)
+        print("Candidate offer = ", candidate_offer)
         print("Offer gap = ", offer_gap)
         
         firm_prob = abs(max(run_results[0][-1]))
@@ -258,15 +261,13 @@ if __name__ == "__main__":
         else:
             if offer_gap==0.0:
                 # classify as NE convergence
-                firm_prob = abs(max(run_results[0][-1]))
-                candidate_prob = abs(max(run_results[1][-1]))
                 print("Firm probability of offer = ", firm_prob)
                 print("Candidate probability of offer = ", candidate_prob)
                 final_deal = {
-                'firm_offer': S_f[np.argmax(firm_offer)],
-                'candidate_offer': S_c[np.argmax(candidate_offer)],
+                'firm_offer': firm_offer,
+                'candidate_offer': candidate_offer,
                 'iterations': 150
-            }
+                }
                 if abs(firm_prob - 1.0) < purity_threshold and abs(candidate_prob - 1) < purity_threshold:
                     print("pure convergence")
                     pure_count+=1
