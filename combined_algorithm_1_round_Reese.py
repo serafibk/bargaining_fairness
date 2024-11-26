@@ -5,6 +5,48 @@ import tqdm
 import matplotlib.pyplot as plt
 
 
+# return -1 or highest index
+def tie_breaker(util, obj_min_strat, responder):
+    # identify all indices with the maximum utility
+    max_util = max(util)
+    tied_util = [ind for ind, ele in enumerate(util) if ele == max_util]
+
+    # Check if there are multiple indices with max utility
+    if len(tied_util)>1:
+        max_p = max(obj_min_strat)
+        tied_p = [ind for ind, ele in enumerate(obj_min_strat) if ele == max_p]
+
+        # double check: multiple w_p in w_var are equal 
+        # if len(tied_util)>1 and tied_p!=tied_util:
+        #     for index in tied_p:
+        #         if index not in tied_util:
+                    # print("Candidate? ", responder)
+                    # print("Max Util: ", max_util)
+                    # print("Tied indices: ", tied_util)
+                    # print("Max Prob: ", max_p)
+                    # print("Tied indices: ", tied_p)
+                    # print("Tied index util: ", util[tied_p[-1]])
+                
+        # Note: all indices showing up in tied_p show up in tied_util
+        # unless there's only one index in tied_p, then it may not.
+            # That one index is usually a greater index than the rest,
+            # and almost always leads to a convergence
+
+        # case 1: indices with maximum utility are the same as the indices with maximum probability
+        if tied_p==tied_util:
+            # For the candidate, select the highest index
+            # For the firm, select the lowest index
+            return max(tied_util) if responder else min(tied_util)
+        elif responder: # tied ind with highest prob do not match ind with highest utility
+            return max(tied_p) if max(tied_util) < max(tied_p) else max(tied_util)
+        elif not responder:
+            return min(tied_p) if min(tied_util) > min(tied_p) else min(tied_util)
+        # Reese Note: is this ok? I'm afraid I may be artificially overriding the
+            # obj function's probability assignment in the last two cases
+
+    return None
+
+
 def agent_update(prev_not_i_strategies, S_i, alpha_i, M, regularizer="euclidean", responder= False):
 
     utility_feedback_vector = [np.float64(0.0) for s in S_i]
@@ -22,7 +64,6 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, regularizer="euclidean"
                 for k, w_c_supp in enumerate(S_i):
                     if w_c_supp <= s_f:
                         utility_feedback_vector[j] += w_c[k] *  (1-s_f)
-    
 
     w_var = cp.Variable(len(S_i))
     
@@ -38,7 +79,16 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, regularizer="euclidean"
 
     problem.solve()
     obj_min_strat = [max(np.float64(0.0), w_p.value) for w_p in w_var] #objective maximizing strategy
-    return obj_min_strat
+    
+    # TIE BREAK
+    # Note: If reference point is not 0, must handle accordingly.
+    opt_index = tie_breaker(utility_feedback_vector, obj_min_strat, responder)
+    
+    # set pure: 1 = max index prob in strat if need be
+    return [1 if i == opt_index else 0 for i in range(len(obj_min_strat))] if opt_index else obj_min_strat
+    
+
+
     
     # keep largest non-zero support
     # largest = 0
@@ -55,7 +105,15 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, regularizer="euclidean"
 def get_support(w_i, S_i):
     return [S_i[i] for i in range(len(w_i)) if w_i[i] > 0]
 
-def run_simulation(S_f, S_c, T=100, M=None, strategy="pure", reference=None):
+def check_convergence(w_f_t_p_1, w_c_t_p_1, prev_f, prev_c, t, window_size=10, convergence_threshold=1e-8):
+    if t >= window_size:
+        f_converged = all(np.linalg.norm(np.array(w_f_t_p_1) - np.array(prev_f[-i])) < convergence_threshold for i in range(1, window_size + 1))
+        c_converged = all(np.linalg.norm(np.array(w_c_t_p_1) - np.array(prev_c[-i])) < convergence_threshold for i in range(1, window_size + 1))
+
+        return f_converged and c_converged
+    return False
+
+def run_simulation(S_f, S_c, T=100, M=None, strategy=None, reference=None):
     if M is None:
         M = 1 / np.sqrt(T)
 
@@ -66,25 +124,32 @@ def run_simulation(S_f, S_c, T=100, M=None, strategy="pure", reference=None):
     if strategy == "biased":
         beta_f_idx = np.random.randint(len(S_f) // 2) # lower
         beta_c_idx = np.random.randint(len(S_c) // 2, len(S_c)) # upper
+    elif strategy == "reversed":
+        beta_f_idx = np.random.randint(len(S_f) // 2, len(S_f)) # upper
+        beta_c_idx = np.random.randint(len(S_c) // 2) # lower
+    elif strategy == "fixed":
+        beta_f_idx = int(len(S_f)/2)
+        beta_c_idx = int(len(S_c)/5) # len(S_c)-1
+    if reference == "biased":
+        alpha_f_idx = np.random.randint(len(S_f) // 2) # lower
+        alpha_c_idx = np.random.randint(len(S_c) // 2, len(S_c)) # upper
+    elif reference == "reversed":
+        alpha_f_idx = np.random.randint(len(S_f) // 2, len(S_f)) # upper
+        alpha_c_idx = np.random.randint(len(S_c) // 2) # lower
+    elif reference == "fixed":
+        alpha_f_idx = int(len(S_f)/2)
+        alpha_c_idx = int(len(S_c)/5)
     beta_f = [1 if i == beta_f_idx else 0 for i in range(len(S_f))]
     beta_c = [1 if i == beta_c_idx else 0 for i in range(len(S_c))]
     alpha_f = [1 if i == alpha_f_idx else 0 for i in range(len(S_f))]
     alpha_c = [1 if i == alpha_c_idx else 0 for i in range(len(S_c))]
-    if reference:
-        if reference == "uniform":
-            alpha_f = [1/len(S_f) for _ in range(len(S_f))]
-            alpha_c = [1/len(S_c) for _ in range(len(S_c))]
-        elif reference == "biased firm":
-            # Biased towards lower values
-            alpha_f = [np.exp(-i) for i in range(len(S_f))]
-            alpha_f = [a/sum(alpha_f) for a in alpha_f]
     
-    print_initial_conditions(beta_f, beta_c, alpha_f, alpha_c, S_f, S_c)
+    initial_conditions = print_initial_conditions(beta_f, beta_c, alpha_f, alpha_c, S_f, S_c)
     
     prev_f = [beta_f]
     prev_c = [beta_c]
 
-    iterations_until_convergence = []
+    final_deal = None
 
     for t in tqdm.tqdm(range(T)):
         w_f_t_p_1 = agent_update(prev_c, S_i=S_f, alpha_i=alpha_f, M=M)
@@ -96,19 +161,20 @@ def run_simulation(S_f, S_c, T=100, M=None, strategy="pure", reference=None):
         # if np.argmax(w_f_t_p_1) >= np.argmax(w_c_t_p_1):
         #     print(f"Offer likely accepted at time {t}: {np.argmax(w_f_t_p_1)}.")
 
-        convergence_threshold = 1e-7
-        # Check convergence (defined correctly?)
-        if t > 0 and (np.linalg.norm(np.array(w_f_t_p_1) - np.array(prev_f[-1])) < convergence_threshold) and (np.linalg.norm(np.array(w_c_t_p_1) - np.array(prev_c[-1])) < convergence_threshold):
+        # Check convergence - use the past 10 strats & threshold 1e-7 by default
+        if check_convergence(w_f_t_p_1, w_c_t_p_1, prev_f, prev_c, t):
             print(f"Converged after {t} iterations.")
-            # print("--Offer gap--")
-            # print((S_f[np.argmax(w_f_t_p_1)] - S_c[np.argmax(w_c_t_p_1)]))
-            iterations_until_convergence.append(t)
+            final_deal = {
+                'firm_offer': S_f[np.argmax(w_f_t_p_1)],
+                'candidate_offer': S_c[np.argmax(w_c_t_p_1)],
+                'iterations': t
+            }
             break
 
         prev_f.append(w_f_t_p_1)
         prev_c.append(w_c_t_p_1)
     # print_final_convergence(w_f_t_p_1, w_c_t_p_1, S_f, S_c, iterations_until_convergence)
-    return prev_f, prev_c, iterations_until_convergence
+    return prev_f, prev_c, initial_conditions, final_deal
 
 
 def plot_max_strategies(results, S_f, S_c):
@@ -125,19 +191,24 @@ def plot_max_strategies(results, S_f, S_c):
         plt.plot(max_strats[1], label='Candidate Strategies')
 
         plt.xlabel('Time Steps')
-        plt.ylabel('Strategy Probability')
+        plt.ylabel('Max Strategy')
         plt.title('Evolution of Strategies Over Time')
         plt.legend()
         plt.show()
 
 def print_initial_conditions(beta_f, beta_c, alpha_f, alpha_c, S_f, S_c):
+    initial_conditions = {
+        'beta_f': get_support(beta_f,S_f),
+        'beta_c': get_support(beta_c,S_c),
+        'alpha_f': get_support(alpha_f,S_f),
+        'alpha_c': get_support(alpha_c,S_c)
+    }
     print("----initial parameters----")
-    print(f"beta_f: {get_support(beta_f,S_f)}")
-    print(f"beta_c: {get_support(beta_c,S_c)}")
-    print(f"alpha_f: {get_support(alpha_f,S_f)}")
-    print(f"alpha_c: { get_support(alpha_c,S_c)}")
+    for condition in initial_conditions.keys():
+        print(f"{condition}: {initial_conditions[condition]}")
+    return initial_conditions
    
-def print_final_convergence(w_f_t_p_1, w_c_t_p_1, S_f, S_c, iterations_until_convergence):
+def print_final_convergence(w_f_t_p_1, w_c_t_p_1, S_f, S_c):
     print("----final convergence----")
     print(f"w_f_T: {w_f_t_p_1}")
     print("--non-zero support--")
@@ -145,42 +216,68 @@ def print_final_convergence(w_f_t_p_1, w_c_t_p_1, S_f, S_c, iterations_until_con
     print(f"w_c_T: {w_c_t_p_1}")
     print("--non-zero support--")
     print(get_support(w_c_t_p_1, S_c))
-    if iterations_until_convergence:
-        print("--number of iterations until convergence--")
-        print(iterations_until_convergence[-1])
 
 if __name__ == "__main__":
     T = 100  # time steps
     M = 1 / np.sqrt(T)  # regularizer constant
-    S_f = [i / T for i in range(T + 1)]
-    S_c = [i / T for i in range(T + 1)]
+    strategy = None
+    reference = None
+    S_f = [i / (T) for i in range(T + 1)]
+    S_c = [i / (T) for i in range(T + 1)]
 
     all_runs_results = []
-    purity_threshold = 1e-7
-    # Run multiple simulations
+    purity_threshold = 5e-7
+    # Run multiple simulation
     num_runs = 10
     pure_count = 0
-    count = 0
+    ne_convergence_data = []
     for _ in range(num_runs):
         pure = False
-        run_results = run_simulation(S_f, S_c, T=T, M=M, strategy="biased")
+        run_results = run_simulation(S_f, S_c, T=T, M=M, strategy=strategy, reference=reference)
         all_runs_results.append(run_results)
-        if len(run_results[2]):
-            if max(run_results[0][-1]) - 1.0 < purity_threshold and max(run_results[1][-1]) - 1 < purity_threshold:
-                print("pure convergence")
-                pure = True
 
         firm_offer = S_f[np.argmax(run_results[0][-1])] 
         candidate_offer = S_c[np.argmax(run_results[1][-1])]
         offer_gap = firm_offer-candidate_offer
         print("Offer gap = ", offer_gap)
-        if offer_gap==0.0:
-            if pure:
-                pure_count+=1
-            count+=1
-    print("num convergences = ", count)
-    print("num pure convergences = ", pure_count)
+        
+        firm_prob = abs(max(run_results[0][-1]))
+        candidate_prob = abs(max(run_results[1][-1]))
+        if run_results[3]:
+            if abs(firm_prob - 1.0) < purity_threshold and abs(candidate_prob - 1) < purity_threshold:
+                print("pure convergence")
+                pure = True
+            
+            if offer_gap==0.0:
+                if pure:
+                    pure_count+=1
+                ne_convergence_data.append({'initial_conditions': run_results[2], 'final_deal': run_results[3]})
+        else:
+            if offer_gap==0.0:
+                # classify as NE convergence
+                firm_prob = abs(max(run_results[0][-1]))
+                candidate_prob = abs(max(run_results[1][-1]))
+                print("Firm probability of offer = ", firm_prob)
+                print("Candidate probability of offer = ", candidate_prob)
+                final_deal = {
+                'firm_offer': S_f[np.argmax(firm_offer)],
+                'candidate_offer': S_c[np.argmax(candidate_offer)],
+                'iterations': 150
+            }
+                if abs(firm_prob - 1.0) < purity_threshold and abs(candidate_prob - 1) < purity_threshold:
+                    print("pure convergence")
+                    pure_count+=1
+                ne_convergence_data.append({'initial_conditions': run_results[2], 'final_deal': final_deal})
+            else:
+                print("Did not converge in ", T, " steps")
+
+    print(f"Total convergences to NE: {len(ne_convergence_data)}")
+    print(f"Total pure convergences to NE: {pure_count}")
+
+    for data in ne_convergence_data:
+        print(f"Initial conditions: {data['initial_conditions']}")
+        print(f"Final deal: {data['final_deal']}")
+        print("---")
+
     plot_max_strategies(all_runs_results, S_f, S_c)
-
-
 
