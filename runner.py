@@ -80,13 +80,12 @@ def automate_simulation(input_file='input_parameters.xlsx', output_filehead='sim
         save_to_spreadsheet(results,output_filename)
     return results
 
-def save_to_spreadsheet(data, output_filename='simulation_results_orderings.xlsx'):
+def save_to_spreadsheet(data, output_filename):
     # Flatten results for saving to a DataFrame
     for result in data:
         flattened_data = []
         for convergence in result['convergence_data']:
             flattened_data.append({
-                'sheet_name': result['sheet_name'],
                 **result['parameters'],
                 **convergence               
             })
