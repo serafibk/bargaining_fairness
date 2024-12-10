@@ -72,15 +72,14 @@ def automate_simulation(input_file='input_parameters.xlsx'):
                 })
             
             results.append({
-                'sheet_name': sheet_name,
                 'parameters': row.to_dict(),
                 'convergence_data': ne_convergence_data
             })
-            output_filename = f'simulation_results_{sheet_name}.xlsx'
-            save_to_spreadsheet(results,output_filename)
+        output_filename = f'simulation_results_orderings_{sheet_name}.xlsx'
+        save_to_spreadsheet(results,output_filename)
     return results
 
-def save_to_spreadsheet(data, output_filename='simulation_results.xlsx'):
+def save_to_spreadsheet(data, output_filename='simulation_results_orderings.xlsx'):
     # Flatten results for saving to a DataFrame
     for result in data:
         flattened_data = []
@@ -95,6 +94,6 @@ def save_to_spreadsheet(data, output_filename='simulation_results.xlsx'):
         
 
 if __name__ == "__main__":
-    input_file = 'input_parameters.xlsx'  # Specify your input file name here
+    input_file = 'orderings.xlsx'  # Specify your input file name here
     results_data = automate_simulation(input_file=input_file)
     # save_to_spreadsheet(results_data)
