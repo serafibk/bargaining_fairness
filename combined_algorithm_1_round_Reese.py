@@ -132,7 +132,7 @@ def run_simulation(S_f, S_c, T=100, M=None, strategy=None, solver='CLARABEL', re
     elif strategy == "reversed":
         beta_f_idx = np.random.randint(len(S_f) // 2, len(S_f)) # upper
         beta_c_idx = np.random.randint(len(S_c) // 2) # lower
-    elif strategy and strategy.find("fixed")!=-1:
+    elif strategy and strategy.find("fixed")!=-1: # input fixed f c  (where f,c denote what to divide the strategy space by)
         _, idxf, idxc = strategy.split(' ')
         if idxf == "len":
             beta_f_idx = len(S_f)-1
@@ -152,7 +152,7 @@ def run_simulation(S_f, S_c, T=100, M=None, strategy=None, solver='CLARABEL', re
     elif reference == "reversed":
         alpha_f_idx = np.random.randint(len(S_f) // 2, len(S_f)) # upper
         alpha_c_idx = np.random.randint(len(S_c) // 2) # lower
-    elif reference and reference.find("fixed")!=-1:
+    elif reference and reference.find("fixed")!=-1: # input fixed f c  (where f,c denote what to divide the strategy space by)
         _, idxf, idxc = reference.split(' ')
         if idxf == "len":
             alpha_f_idx = len(S_f)-1
