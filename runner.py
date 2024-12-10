@@ -1,10 +1,10 @@
 import pandas as pd
 import numpy as np
 import tqdm
-from combined_algorithm_1_round_Reese import run_simulation, get_support
+from combined_algorithm_1_round_Reese import run_simulation, get_support, check_mixed_NE
 
 
-def automate_simulation(input_file='input_parameters.xlsx'):
+def automate_simulation(input_file='input_parameters.xlsx', output_filehead='simulation_results'):
     # Read all sheets from the input spreadsheet
     xls = pd.ExcelFile(input_file)
 
@@ -54,7 +54,8 @@ def automate_simulation(input_file='input_parameters.xlsx'):
                     'offer gap': offer_gap,
                     'converged': converged,
                     'converged to NE': True if converged and offer_gap==0.0 else False,
-                    'pure': True if converged and abs(max_firm - 1.0) < purity_threshold else False,
+                    'converged to pure NE': True if converged and abs(max_firm - 1.0) < purity_threshold else False,
+                    'converged to mixed NE': True if converged and check_mixed_NE(run_results[1][-1],run_results[0][-1], S_f) else False,
                     'iterations': T if not run_results[3] else run_results[3]
                 }
                 initial_conditions = run_results[2]
@@ -75,7 +76,7 @@ def automate_simulation(input_file='input_parameters.xlsx'):
                 'parameters': row.to_dict(),
                 'convergence_data': ne_convergence_data
             })
-        output_filename = f'simulation_results_orderings_{sheet_name}.xlsx'
+        output_filename = f'{output_filehead}_{sheet_name}.xlsx'
         save_to_spreadsheet(results,output_filename)
     return results
 
@@ -94,6 +95,6 @@ def save_to_spreadsheet(data, output_filename='simulation_results_orderings.xlsx
         
 
 if __name__ == "__main__":
-    input_file = 'orderings.xlsx'  # Specify your input file name here
-    results_data = automate_simulation(input_file=input_file)
-    # save_to_spreadsheet(results_data)
+    input_file = 'orderings.xlsx' 
+    output_filehead = 'simulation_results_orderings' # WITHOUT XLSX
+    results_data = automate_simulation(input_file=input_file, output_filehead=output_filehead)

@@ -4,48 +4,28 @@ import itertools
 import tqdm
 import matplotlib.pyplot as plt
 
+def check_mixed_NE(w_c,w_f,S):
 
-# returns -1 or optimal index for pure strat 
-    # Optimal = highest for responder (C) (only for responder)
-def tie_breaker(util, obj_min_strat):
-    # Only forces pure strategy if 
-    # 1. There are multiple indices with max utility
-    # 2. The indices have equal, maximum probability in obj strategy space
+    if 1 not in w_f:
+        # print("here 1")
+        return False
 
-    # identify all indices with the maximum utility
-    max_util = max(util)
-    tied_util = [ind for ind, ele in enumerate(util) if ele == max_util]
 
-    # Check if there are multiple indices with max utility
-    if len(tied_util)>1:
-        max_p = max(obj_min_strat)
-        tied_p = [ind for ind, ele in enumerate(obj_min_strat) if ele == max_p]
-
-        # double check: multiple w_p in w_var are equal 
-        if len(tied_util)>1 and tied_p!=tied_util:
-            for index in tied_p:
-                if index not in tied_util:
-                    print("Max Util: ", max_util)
-                    print("Tied indices: ", tied_util)
-                    print("Max Prob: ", max_p)
-                    print("Tied indices: ", tied_p)
-                    print("Tied index util: ", util[tied_p[-1]])
-                    # Check if reference point (likely pure strat)
-                
-        # Note: all indices showing up in tied_p show up in tied_util
-        # unless there's only one index in tied_p, then it may not.
-            # That one index is usually a greater index than the rest,
-            # and almost always leads to a convergence
-
-        # case 1: indices with maximum utility are the same as the indices with maximum probability
-        if tied_p==tied_util:
-            # For the candidate, select the highest index
-            return max(tied_util)
-        
-        return None if max(tied_util) < max(tied_p) else max(tied_util)
-
-    return None
-
+    if np.argmax(get_support(w_c,S)) != np.argmax(w_f):
+        # print("here 2")
+        return False
+    
+    utilities = []
+    for i in range(len(S)):
+        if i <= np.argmax(w_f):
+            utilities.append(sum([w_c[j] for j in range(i+1)])*(1-S[i]))
+    
+    print(utilities)
+    if np.argmax(utilities) == np.argmax(w_f):
+        return True
+    else:
+        # print("here 3")
+        return False
 
 def agent_update(prev_not_i_strategies, S_i, alpha_i, M, regularizer="euclidean", solver='CLARABEL', responder= False):
 
@@ -80,16 +60,9 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, regularizer="euclidean"
     problem.solve(solver=solver)
     obj_min_strat = [max(np.float64(0.0), w_p.value) for w_p in w_var] #objective maximizing strategy
     # print("Solver used:", problem.solver_stats.solver_name)
-    # TIE BREAK
-    # Note: If reference point is not 0, must handle accordingly.
-    # opt_index = None
-    # if responder:
-        # opt_index = tie_breaker(utility_feedback_vector, obj_min_strat)
+
     return obj_min_strat
-    
-    # set pure: 1 = max index prob in strat if need be
-    # return [1 if i == opt_index else 0 for i in range(len(obj_min_strat))] if opt_index else obj_min_strat
-    
+   
     # keep largest non-zero support
     # largest = 0
     # for i, w_supp in enumerate(w_t_p_1_all):
