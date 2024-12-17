@@ -65,6 +65,29 @@ def get_support(w_i,S_i):
 
     
 
+def check_NE(w_f,w_c, S,delta):
+
+    if len(get_support(w_f,S)) >1 or len(get_support(w_c,S)) >1:
+        return False
+    
+    w_f_1 = get_support(w_f,S)[0][0]
+    w_f_2 = get_support(w_f,S)[0][1]
+
+    w_c_1 = get_support(w_c,S)[0][0]
+    w_c_2 = get_support(w_c,S)[0][1]
+
+    if w_f_1 == w_c_1:
+        if delta * (w_c_2) <= 1-w_f_1 and delta* (1-w_f_2) <= w_f_1:
+            return True
+        else:
+            return False
+    elif w_f_2 == w_c_2:
+        if delta * (w_c_2) >= 1-w_c_1 and delta* (1-w_c_2) >= w_f_1:
+            return True
+        else:
+            return False
+    else:
+        return False
 
 
 
@@ -76,61 +99,75 @@ if __name__ == "__main__":
     alpha_points = []
     sample_points = np.arange(0.04,1,0.04, dtype=float)
     sample_strategies = [(float(round(s,2)), float(round(sample_points[len(sample_points)-1-i],2))) for i,s in enumerate(sample_points)]
-    N = 1#len(sample_strategies)
-    for n in range(N):
-        T = 50 # time steps
-        M = 1/np.sqrt(T) # regularizer constant
-        delta = 0.9 # time discount factor
+    T = 100 # time steps
+    delta = 0.9 # time discount factor
+    M = 40
+    D = 16
+    # R_f = 8 # fixed first round or second round index
+    # R_c = 3 # fixed first round or second round index
+    S_f = list(itertools.product([i/D for i in range(1,D+1)],[i/D for i in range(1,D+1)]))
+    S_c = list(itertools.product([i/D for i in range(1,D+1)],[i/D for i in range(1,D+1)]))
 
-        S_f = list(itertools.product([i/T for i in range(T+1)],[i/T for i in range(T+1)]))
-        S_c = list(itertools.product([i/T for i in range(T+1)],[i/T for i in range(T+1)]))
+    def choose_supp_idx(s, S_i):
+        return S_i.index(s)
 
-        def choose_supp_idx(s, S_i):
-            return S_i.index(s)
+
+    for n_r in range(D):
+        for n_c in range(D):
+
+            print(f"firm strategy {n_r*D + n_c}/  {D**2}, candidate strategy fixed at 81 ")
+        
+            beta_f_idx = n_r*D + n_c#np.random.randint(len(S_f))#choose_supp_idx((0.5, 0.7), S_f)#choose_supp_idx(sample_strategies[n],S_f)#
+            beta_c_idx = 81#n_c#np.random.randint(len(S_c))#choose_supp_idx(sample_strategies[N-1-n],S_c)#np.random.randint(len(S_c))
+            alpha_f_idx = 21#np.random.randint(len(S_f))# choose_supp_idx(sample_strategies[np.random.randint(N)],S_f)#np.random.randint(len(S_f))
+            alpha_c_idx = 93#np.random.randint(len(S_c)) #choose_supp_idx(sample_strategies[np.random.randint(N)],S_c)#np.random.randint(len(S_c))
+
+            beta_f = [1 if i == beta_f_idx else 0 for i in range(len(S_f))]
+            beta_c = [1 if i == beta_c_idx else 0 for i in range(len(S_c))]
+            alpha_f = [1 if i == alpha_f_idx else 0 for i in range(len(S_f))]
+            alpha_c = [1 if i == alpha_c_idx else 0 for i in range(len(S_c))]
+
+            prev_f = [beta_f]
+            prev_c = [beta_c]
+
+            for t in tqdm.tqdm(range(int(T))):
+
+                w_f_t_p_1 = agent_update(prev_c,S_i=S_f,alpha_i=alpha_f,delta=delta, M=M)
+                w_c_t_p_1 = agent_update(prev_f,S_i=S_c,alpha_i=alpha_c,delta=delta, M=M, responder=True)
+
+                # print(f"w_f_t_p_1 support: {get_support(w_f_t_p_1, S_f)}")
+                # print(f"w_c_t_p_1 support: {get_support(w_c_t_p_1, S_c)}")
+                # print(w_f_t_p_1)
+                # print(w_c_t_p_1)
+                # break
+                # if max(w_f_t_p_1) < 0.99999 or max(w_c_t_p_1) < 0.99999: # my check for justification of rounding to avoid drift from pure
+                #     print("FOUND")
+                #     print(w_f_t_p_1)
+                #     print(w_c_t_p_1)
+
+                prev_f.append(w_f_t_p_1)
+                prev_c.append(w_c_t_p_1) 
+            
+            print("----initial parameters----")
+            print(f"beta_f: {get_support(beta_f,S_f)}")
+            print(f"beta_c: {get_support(beta_c,S_c)}")
+            print(f"alpha_f: {get_support(alpha_f,S_f)}")
+            print(f"alpha_c: { get_support(alpha_c,S_c)}")
         
 
-        beta_f_idx = np.random.randint(len(S_f))#choose_supp_idx((0.5, 0.7), S_f)#choose_supp_idx(sample_strategies[n],S_f)#
-        beta_c_idx = np.random.randint(len(S_c))#choose_supp_idx(sample_strategies[N-1-n],S_c)#np.random.randint(len(S_c))
-        alpha_f_idx =np.random.randint(len(S_f))# choose_supp_idx(sample_strategies[np.random.randint(N)],S_f)#np.random.randint(len(S_f))
-        alpha_c_idx =np.random.randint(len(S_c)) #choose_supp_idx(sample_strategies[np.random.randint(N)],S_c)#np.random.randint(len(S_c))
+            print("----final convergence----")
+            # print(f"w_f_T: {w_f_t_p_1}")
+            print("--non-zero support--")
+            print(get_support(w_f_t_p_1, S_f))
+            # print(f"w_c_T: {w_c_t_p_1}")
+            print("--non-zero support--")
+            print(get_support(w_c_t_p_1, S_c))
 
-        beta_f = [1 if i == beta_f_idx else 0 for i in range(len(S_f))]
-        beta_c = [1 if i == beta_c_idx else 0 for i in range(len(S_c))]
-        alpha_f = [1 if i == alpha_f_idx else 0 for i in range(len(S_f))]
-        alpha_c = [1 if i == alpha_c_idx else 0 for i in range(len(S_c))]
+            print(f"NE: {check_NE(w_f_t_p_1,w_c_t_p_1,S_f,delta)}")
 
-        prev_f = [beta_f]
-        prev_c = [beta_c]
-
-        for t in tqdm.tqdm(range(int(T))):
-
-            w_f_t_p_1 = agent_update(prev_c,S_i=S_f,alpha_i=alpha_f,delta=delta, M=M)
-            w_c_t_p_1 = agent_update(prev_f,S_i=S_c,alpha_i=alpha_c,delta=delta, M=M, responder=True)
-
-            print(f"w_f_t_p_1 support: {get_support(w_f_t_p_1, S_f)}")
-            print(f"w_c_t_p_1 support: {get_support(w_c_t_p_1, S_c)}")
-
-            prev_f.append(w_f_t_p_1)
-            prev_c.append(w_c_t_p_1) 
-        
-        print("----initial parameters----")
-        print(f"beta_f: {get_support(beta_f,S_f)}")
-        print(f"beta_c: {get_support(beta_c,S_c)}")
-        print(f"alpha_f: {get_support(alpha_f,S_f)}")
-        print(f"alpha_c: { get_support(alpha_c,S_c)}")
-    
-
-        print("----final convergence----")
-        # print(f"w_f_T: {w_f_t_p_1}")
-        print("--non-zero support--")
-        print(get_support(w_f_t_p_1, S_f))
-        # print(f"w_c_T: {w_c_t_p_1}")
-        print("--non-zero support--")
-        print(get_support(w_c_t_p_1, S_c))
-
-        intitial_strategies.append((beta_f,beta_c))
-        final_strategies.append((w_f_t_p_1, w_c_t_p_1))
-        alpha_points.append((alpha_f,alpha_c))
+            intitial_strategies.append((beta_f,beta_c))
+            final_strategies.append((w_f_t_p_1, w_c_t_p_1))
+            alpha_points.append((alpha_f,alpha_c))
 
     # plotting initial vs. final conditions
     P_first_round_initial = []
@@ -145,6 +182,7 @@ if __name__ == "__main__":
     R_alpha_first_round_initial = []
     P_alpha_second_round_initial = []
     R_alpha_second_round_initial = []
+    colors= []
 
     for initial, final, alpha in zip(intitial_strategies, final_strategies, alpha_points):
         R_first_round_initial.append(get_support(initial[1],S_c)[0][0])
@@ -163,37 +201,78 @@ if __name__ == "__main__":
         R_second_round_final.append(get_support(final[1],S_c)[0][1])
         P_second_round_final.append(get_support(final[0],S_f)[0][1])
 
+        if check_NE(final[0],final[1],S_c,delta) == False:
+            c=0
+        elif P_first_round_final[-1] == R_first_round_final[-1]:
+            c = 1-P_first_round_final[-1]
+        else:
+            c = delta * R_second_round_final[-1]
 
+        colors.append(c)
+
+
+
+    colors_reshaped = np.zeros((D,D))
+    for n_f in range(D):
+        for n_c in range(D):
+            colors_reshaped[n_f][n_c] = colors[n_f*(D) + n_c]
+        
     # plotting
-    color = plt.cm.rainbow(np.linspace(0, 1, N))
-    fig, (ax1, ax2) = plt.subplots(1,2)
-    fig.suptitle("Initial conditions vs. final values")
-    for i, c in enumerate(color):
-        #first round
-        ax1.scatter(P_first_round_initial[i], R_first_round_initial[i], color=c, label= "Initial Strategies")
-        ax1.scatter(P_alpha_first_round_initial[i], R_alpha_first_round_initial[i], color=c, marker="+", label = "Reference Points")
-        ax1.scatter(P_first_round_final[i], R_first_round_final[i], color=c,marker = "x", label="Final Strategies")
+    # color = plt.cm.rainbow(np.linspace(0, 1, N))
+    fig, ax = plt.subplots()
+    fig.suptitle("Initial strategies vs. final proposer payoff values at NE")
+    values=ax.imshow(colors_reshaped)
+    ax.set_xticks(np.arange(D), labels=[at for at in set(P_second_round_initial)])
+    ax.set_yticks(np.arange(D), labels=[o for o in set(P_first_round_initial)])
+
+    # ax2.imshow(colors_reshaped)
+    # ax2.set_xticks(np.arange(N), labels=[i/D for i in range(N)])
+    # ax2.set_yticks(np.arange(N), labels=[(N-i)/D for i in range(N)])
+
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+         rotation_mode="anchor")
+
+    # plt.setp(ax2.get_xticklabels(), rotation=45, ha="right",
+    #      rotation_mode="anchor")
+
+    for i in range(D):
+        for j in range(D):
+            if round(colors_reshaped[i, j],3) == 0:
+                text = ax.text(j, i, "N/A",
+                        ha="center", va="center", color="w")
+            else:
+                continue
+
+    fig.colorbar(values,ax=ax)
+            # text = ax2.text(j, i, round(colors_reshaped[i, j],3),
+            #             ha="center", va="center", color="w")
+    # for i, c in enumerate(color):
+    #     #first round
+        
+        # ax1.scatter(P_first_round_initial[i], R_first_round_initial[i], color=c, label= "Initial Strategies")
+        # ax1.scatter(P_alpha_first_round_initial[i], R_alpha_first_round_initial[i], color=c, marker="+", label = "Reference Points")
+        # ax1.scatter(P_first_round_final[i], R_first_round_final[i], color=c,marker = "x", label="Final Strategies")
 
         #second round
-        ax2.scatter(P_second_round_initial[i], R_second_round_initial[i], color=c, label= "Initial Strategies")
-        ax2.scatter(P_alpha_second_round_initial[i], R_alpha_second_round_initial[i], color=c, marker="+", label = "Reference Points")
-        ax2.scatter(P_second_round_final[i], R_second_round_final[i], color=c, marker="x", label="Final Strategies")
+        # ax2.scatter(P_second_round_initial[i], R_second_round_initial[i], color=c, label= "Initial Strategies")
+        # ax2.scatter(P_alpha_second_round_initial[i], R_alpha_second_round_initial[i], color=c, marker="+", label = "Reference Points")
+        # ax2.scatter(P_second_round_final[i], R_second_round_final[i], color=c, marker="x", label="Final Strategies")
     
-    ax1.plot(np.arange(0,1,0.1), np.arange(0,1,0.1), "k--") # agreement reference line
-    ax1.title.set_text("First round")
+    # ax1.plot(np.arange(0,1,0.1), np.arange(0,1,0.1), "k--") # agreement reference line
+    # ax.title.set_text("First round")
     # ax1.legend()
-    ax1.set_xlabel("Proposer Strategy Values")
-    ax1.set_ylabel("Responder Strategy Values")
-    ax1.set_xlim((0,1))
-    ax1.set_ylim((0,1))
+    ax.set_xlabel("Proposer First Round Strategy - Offer Values")
+    ax.set_ylabel("Proposer Second Round Strategy - Acceptance Threshold Values")
+    # ax1.set_xlim((0,1))
+    # ax1.set_ylim((0,1))
 
-    ax2.plot(np.arange(0,1,0.1), np.arange(0,1,0.1), "k--") # agreement reference line
-    ax2.title.set_text("Second round")
-    # ax2.legend()
-    ax2.set_xlabel("Proposer Strategy Values")
-    # ax2.set_ylabel("Responder Strategy Values")
-    ax2.set_xlim((0,1))
-    ax2.set_ylim((0,1))
+    # ax2.plot(np.arange(0,1,0.1), np.arange(0,1,0.1), "k--") # agreement reference line
+    # ax2.title.set_text("Second round")
+    # # ax2.legend()
+    # ax2.set_xlabel("Proposer Strategy Values")
+    # # ax2.set_ylabel("Responder Strategy Values")
+    # # ax2.set_xlim((0,1))
+    # # ax2.set_ylim((0,1))
 
     plt.show()
 
