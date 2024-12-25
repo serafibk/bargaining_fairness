@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 def check_mixed_NE(w_c,w_f,S):
 
-    if 1 not in w_f:
+    if 1-max(w_f)>1e-5:
         # print("here 1")
         return False
 
@@ -78,15 +78,20 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, regularizer="euclidean"
 def get_support(w_i, S_i):
     return [S_i[i] for i in range(len(w_i)) if w_i[i] > 0]
 
-def check_convergence(w_f_t_p_1, w_c_t_p_1, prev_f, prev_c, t, window_size=10, convergence_threshold=1e-8):
+def check_convergence(w_f_t_p_1, w_c_t_p_1, prev_f, prev_c, t, window_size=10, convergence_threshold=1e-10, fast=False):
     if t >= window_size:
         f_converged = all(np.linalg.norm(np.array(w_f_t_p_1) - np.array(prev_f[-i])) < convergence_threshold for i in range(1, window_size + 1))
         c_converged = all(np.linalg.norm(np.array(w_c_t_p_1) - np.array(prev_c[-i])) < convergence_threshold for i in range(1, window_size + 1))
 
         return f_converged and c_converged
+    elif fast and t >= window_size:
+        max_firm = max(w_f_t_p_1)
+        max_cand = max(w_c_t_p_1)
+        if (1-max_firm<0.001) and (1-max_cand<0.05):
+            return True
     return False
 
-def run_simulation(S_f, S_c, T=100, M=None, strategy=None, solver='CLARABEL', reference=None):
+def run_simulation(S_f, S_c, T=100, M=None, strategy=None, solver='CLARABEL', reference=None, fast=False):
     if M is None:
         M = 1 / np.sqrt(T)
 
@@ -163,7 +168,7 @@ def run_simulation(S_f, S_c, T=100, M=None, strategy=None, solver='CLARABEL', re
 
         # Check convergence - use the past 10 strats & threshold 1e-7 by default
         num_iter=0
-        if check_convergence(w_f_t_p_1, w_c_t_p_1, prev_f, prev_c, t):
+        if check_convergence(w_f_t_p_1, w_c_t_p_1, prev_f, prev_c, t, fast=fast):
             print(f"Converged after {t} iterations.")
             num_iter=t
             break
