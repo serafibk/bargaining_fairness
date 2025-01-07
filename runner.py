@@ -13,8 +13,10 @@ def automate_simulation(input_file='input_parameters.xlsx', output_filehead='sim
         params = pd.read_excel(xls, sheet_name=sheet_name)
         
         for index, row in params.iterrows():
+            print(row)
             T = int(row['T'])
             M = 1 / (T**float(row['M']))
+            fast = bool(row['fast'])
             strategy = str(row['strategy'])
             solver = str(row['solver'])
             reference = str(row['reference'])
@@ -25,11 +27,11 @@ def automate_simulation(input_file='input_parameters.xlsx', output_filehead='sim
             
             all_runs_results = []
             ne_convergence_data = []
-            convergence_threshold = 5e-3
-            purity_threshold = 5e-7
+            purity_threshold_c = 5e-2
+            purity_threshold_f = 1e-7
             
             for _ in range(num_runs):
-                run_results = run_simulation(S_f, S_c, T=T, M=M, strategy=strategy, solver=solver, reference=reference)
+                run_results = run_simulation(S_f, S_c, T=T, M=M, strategy=strategy, solver=solver, reference=reference, fast=fast)
                 all_runs_results.append(run_results)
 
                 max_firm = max(run_results[0][-1])
@@ -40,9 +42,9 @@ def automate_simulation(input_file='input_parameters.xlsx', output_filehead='sim
                 firm_offer = S_f[min(tied_firm)]
                 candidate_offer = S_c[max(tied_cand)]
                 offer_gap = firm_offer-candidate_offer
-                prob_gap = 2-max_firm-max_cand
-                print(prob_gap)
-                converged = False if (not run_results[3] or prob_gap>convergence_threshold) else True
+                # prob_gap = 2-max_firm-max_cand
+                # or (not run_results[3] and prob_gap>pure_convergence_threshold)) 
+                converged = False if not run_results[3] else True
                 
                 final_deal = {
                     'firm_offer': firm_offer,
@@ -54,8 +56,8 @@ def automate_simulation(input_file='input_parameters.xlsx', output_filehead='sim
                     'offer gap': offer_gap,
                     'converged': converged,
                     'converged to NE': True if converged and offer_gap==0.0 else False,
-                    'converged to pure NE': True if converged and abs(max_firm - 1.0) < purity_threshold else False,
-                    'converged to mixed NE': True if converged and check_mixed_NE(run_results[1][-1],run_results[0][-1], S_f) else False,
+                    'pure NE': True if abs(max_firm - 1.0) < purity_threshold_f and abs(max_cand - 1.0) < purity_threshold_c else False,
+                    'mixed NE': True if check_mixed_NE(run_results[1][-1],run_results[0][-1], S_f) else False,
                     'iterations': T if not run_results[3] else run_results[3]
                 }
                 initial_conditions = run_results[2]
@@ -82,18 +84,18 @@ def automate_simulation(input_file='input_parameters.xlsx', output_filehead='sim
 
 def save_to_spreadsheet(data, output_filename):
     # Flatten results for saving to a DataFrame
+    flattened_data = []
     for result in data:
-        flattened_data = []
         for convergence in result['convergence_data']:
             flattened_data.append({
                 **result['parameters'],
                 **convergence               
             })
-        df = pd.DataFrame(flattened_data)
-        df.to_excel(output_filename, index=False)
+    df = pd.DataFrame(flattened_data)
+    df.to_excel(output_filename, index=False)
         
 
 if __name__ == "__main__":
-    input_file = 'orderings.xlsx' 
-    output_filehead = 'simulation_results_orderings' # WITHOUT XLSX
+    input_file = 'retests.xlsx' 
+    output_filehead = 'simulation_results_retests' # WITHOUT XLSX
     results_data = automate_simulation(input_file=input_file, output_filehead=output_filehead)
