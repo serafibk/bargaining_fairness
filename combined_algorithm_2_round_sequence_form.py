@@ -3,6 +3,7 @@ import numpy as np
 import itertools
 import tqdm
 import matplotlib.pyplot as plt
+from matplotlib import animation
 
 # NO REFERENCE POINT CURRENTLY
 
@@ -19,16 +20,21 @@ def agent_update(prev_not_i_strategies, A, delta, M, responder= False):
                 utility_feedback_vector[i] += (1-a) * r_r[f"A{a}"][0] # a_i accepted
                 for j,b in enumerate(A):
                     utility_feedback_vector[len(A)*(i+1)+j] += delta * b * r_r[f"R{a}{b}"][0] # accepts counter offer from responder       
+        
+        for i,a in enumerate(A):
+            print(f"first round offer:{a}, total cumulative utility: {utility_feedback_vector[i] +sum([utility_feedback_vector[len(A)*(i+1)+j] for j in range(len(A))]) }")
 
         # set up problem
         r_var = cp.Variable(len(A)+2*len(A)**2)
-        objective = cp.Maximize(r_var@utility_feedback_vector - cp.norm(r_var, 2)/(2*M)) 
+        objective = cp.Maximize(r_var@utility_feedback_vector - cp.norm(r_var, 2)**2/(2*M)) 
 
         # create summation constraints
-        constraints = [cp.min(r_var)>=0, cp.sum(r_var[:len(A)])==1] # >=0 and first offer probabilities sum to 1
+        # constraints = [cp.min(r_var)>=0, cp.sum(r_var[:len(A)])==1] # >=0 and first offer probabilities sum to 1 (first extension of empty sequence for proposer)
+        constraints = [r_var[i]>=0 for i in range(len(A)+2*len(A)**2)]
+        constraints.append(cp.sum(r_var[:len(A)])==1)
         for i in range(len(A)):
             for j in range(len(A)):
-                constraints.append(r_var[i] == cp.sum(r_var[(i+1)*len(A)+j]+r_var[(i+1)*len(A)+len(A)**2+j])) # mass on Aa_j and Ra_j (after responder rejects a_i) sums to mass on a_i
+                constraints.append(r_var[i] == cp.sum(r_var[(i+1)*len(A)+j]+r_var[(i+1)*len(A)+len(A)**2+j])) # mass on a_iAa_j and a_iRa_j (after responder rejects a_i) sums to mass on a_i
 
 
     else: # responder
@@ -46,47 +52,34 @@ def agent_update(prev_not_i_strategies, A, delta, M, responder= False):
         objective = cp.Maximize(r_var@utility_feedback_vector - cp.norm(r_var, 2)**2/(2*M))
 
         # create summation constraints
-        constraints = [cp.min(r_var)>=0]
+        # constraints = [cp.min(r_var)>=0] # all masses >=0
+        constraints = [r_var[i]>=0 for i in range(len(A)+len(A)**2)]
         for i in range(len(A)):
-            constraints.append(r_var[i] + cp.sum(r_var[len(A)*(i+1):len(A)*(i+2)]) == 1)
+            constraints.append(r_var[i] + cp.sum(r_var[len(A)*(i+1):len(A)*(i+2)]) == 1) # A_i, R_ia_j for each proposer offer a_i is an extension of the empty sequence for the responder
         
 
     # solve problem and populate strategy dictionary r_t_p_1
     problem = cp.Problem(objective,constraints)
     problem.solve()
 
-    mass_values = [max(0,round(m, 9)) for m in r_var.value]
+    mass_values = [max(0,round(m, 8)) for m in r_var.value] # accounts for computational errors (cp "correct" up to 1e-8)
+    # for cs in constraints:
+    #     print(f"constraint: {cs}, dual variable value: {cs.dual_value}")
+
+    # exit()
     
     if responder == False: # proposer
         r_t_p_1 = {f"{a}" : [mass_values[i],dict({f"A{b}": [mass_values[(i+1)*len(A)+j]] for j,b in enumerate(A)}.items(), **{f"R{b}":[mass_values[(i+1)*len(A)+len(A)**2+j]] for j,b in enumerate(A)})] for i,a in enumerate(A)}
     else: # responder
-        # for i in range(len(A)):
-        #     print(r_var.value[len(A)*(i+1):len(A)*(i+2)])
-        #     # print(utility_feedback_vector[len(A)*(i+1):len(A)*(i+2)])
-        #     # print(utility_feedback_vector[i])
-        #     print(sum(r_var.value[len(A)*(i+1):len(A)*(i+2)])+r_var.value[i])
-        # print("______________________")
         r_t_p_1 = dict({f"A{a}":[mass_values[i]] for i,a in enumerate(A)}, **{f"R{a}{b}":[mass_values[len(A)*(i+1)+j]] for i,a in enumerate(A) for j,b in enumerate(A)})
-        # print(r_t_p_1)
 
     return r_t_p_1
-
-
-
-def get_support(r_i,S_i):
-
-    # print("----non-zero support----")
-    non_zero_support = []
-    for i,w in enumerate(r_i):
-        if w>0:
-            non_zero_support.append(S_i[i])
-
-    
-    return non_zero_support
 
     
 
 def check_pure_NE(r_p,r_r, A,delta):
+    ## checks for two possible pure NE corresponding to the proposer having an approx pure first round offer that is either accepted as a best response for both OR
+    # first round offer is approx purely rejected by responder and a second round offer approx purely offered by responder is accepted as a best response
 
     # check first round offers 
     eps = 1e-2 # tolerance for approx NE (?)
@@ -151,62 +144,72 @@ def check_pure_NE(r_p,r_r, A,delta):
 
             
 
-            
-
-
-
-
-
 
     
-def generate_initial_points(beta_p, beta_r, A):
+def generate_initial_points(beta_p, beta_r, A, pure = False):
 
     def random_probability_mass_split(mass, n):
         # splits the mass into n pieces randomly (for initialization) - returns vector of size n
-
         values = []
         remaining_mass = mass
 
-        for i in range(n):
-            if i == n-1: # ensure it adds up to mass
-                values.append(remaining_mass)
-            else:
-                mass_value = remaining_mass * np.random.random()
-                values.append(mass_value)
-                remaining_mass = remaining_mass - mass_value
+        for i in range(n-1):
+            mass_value = remaining_mass * np.random.random()
+            values.append(mass_value)
+            remaining_mass = remaining_mass - mass_value
+
+        values.append(remaining_mass) # ensure it adds up to mass
         
         return values
+    if pure == True: # randomly choose a pure strategy
+        # proposer 
+        first_offer_idx = np.random.randint(len(A))
+        beta_p[f"{A[first_offer_idx]}"][0] = 1
+        for b in A:
+            second_response_idx = np.random.randint(2)
+            if second_response_idx == 0:
+                beta_p[f"{A[first_offer_idx]}"][1][f"A{b}"][0] = 1
+            else:
+                beta_p[f"{A[first_offer_idx]}"][1][f"R{b}"][0] = 1
+        
+        # responder
+        for a in A:
+            response_idx = np.random.randint(len(A)+1)
+            if response_idx == 0:
+                beta_r[f"A{a}"][0] = 1
+            else:
+                beta_r[f"R{a}{A[response_idx-1]}"][0]=1
+    else: # randomly choose any strategy
+        # proposer
+        mass_split_values = random_probability_mass_split(1, len(A)) # initial split
 
-    # proposer
-    mass_split_values = random_probability_mass_split(1, len(A)) # initial split
+        for i,a in enumerate(A):
+            beta_p[f"{a}"][0] = mass_split_values[i] # mass for each first round offer
+            for j,b in enumerate(A):
+                a_mass_split_values = random_probability_mass_split(mass_split_values[i],2) # split for each second round accept / reject extension of a first round offer 
+                beta_p[f"{a}"][1][f"A{b}"][0] = a_mass_split_values[0] # mass for accept for each possible second round offer proposer sees
+                beta_p[f"{a}"][1][f"R{b}"][0] = a_mass_split_values[1] # mass for reject for each possible second round offer proposer sees
 
-    for i,a in enumerate(A):
-        beta_p[f"{a}"][0] = mass_split_values[i] 
-        for j,b in enumerate(A):
-            a_mass_split_values = random_probability_mass_split(mass_split_values[i],2) # split for each second round accept / reject extension of a first round offer 
-            beta_p[f"{a}"][1][f"A{b}"][0] = a_mass_split_values[0]
-            beta_p[f"{a}"][1][f"R{b}"][0] = a_mass_split_values[1]
+                # debugging 
+                if beta_p[f"{a}"][1][f"R{b}"][1] != "-" or beta_p[f"{a}"][1][f"A{b}"][1] != "-" :
+                    print("ERROR")
+                    print(beta_p[f"{a}"][1][f"R{b}"])
+                    print(beta_p[f"{a}"][1][f"A{b}"])
+                    exit()
+        
+        # responder
+        for i,a in enumerate(A):
+            mass_split_values = random_probability_mass_split(1, len(A)+1)
+            beta_r[f"A{a}"][0] = mass_split_values[0] # acceptance mass
+            for j,b in enumerate(A):
+                beta_r[f"R{a}{b}"][0] = mass_split_values[j+1] # mass for each reject + new offer
 
             # debugging
-            if beta_p[f"{a}"][1][f"R{b}"][1] != "-" or beta_p[f"{a}"][1][f"A{b}"][1] != "-" :
-                print("ERROR")
-                print(beta_p[f"{a}"][1][f"R{b}"])
-                print(beta_p[f"{a}"][1][f"A{b}"])
-                exit()
-    
-    # responder
-    for i,a in enumerate(A):
-        mass_split_values = random_probability_mass_split(1, len(A)+1)
-        beta_r[f"A{a}"][0] = mass_split_values[0] # acceptance mass
-        for j,b in enumerate(A):
-            beta_r[f"R{a}{b}"][0] = mass_split_values[j+1]
-
-        # debugging
-        if beta_r[f"A{a}"][1] != "-" or beta_r[f"R{a}{b}"][1] != "-" :
-                print("ERROR")
-                print(beta_r[f"A{a}"])
-                print(beta_r[f"R{a}{b}"])
-                exit()
+            if beta_r[f"A{a}"][1] != "-" or beta_r[f"R{a}{b}"][1] != "-" :
+                    print("ERROR")
+                    print(beta_r[f"A{a}"])
+                    print(beta_r[f"R{a}{b}"])
+                    exit()
     
     return beta_p, beta_r
 
@@ -217,45 +220,71 @@ if __name__ == "__main__":
     final_strategies = []
     T = 1000 # time steps
     delta = 0.9 # time discount factor
-    M = 0.5
-    D = 5
+    M = 0.5 # learning rate
+    D = 5 # discretization constant
 
-    A = [i/D for i in range(1,D+1)] # action list for offers
+    A = [i/D for i in range(1,D+1)] # action list for offers {1/D, ... , 1}
 
-    for n in range(10):
 
-        # initial strategies as realization plans now (or sequence-form polytopes)
+    for n in range(2,4): # try 20 random initializations
+
+        # initial strategies as realization plans now -- note that '-' could be used later on for recursive setting for n rounds of bargaining 
         beta_p_zeroed = {f"{a}" : [0,dict({f"A{b}": [0,"-"] for b in A}.items(), **{f"R{b}":[0,"-"] for b in A})] for a in A} # code is float(offer)A/Rfloat(responder offer)
-        # proposer constraints: beta_p[i][0] == sum([beta_p[i][1][j][0] for j in A]) for each i in A, sum([beta_p[i][0] for i in A]) == 1, all masses >= 0
         beta_r_zeroed = dict({f"A{a}":[0,"-"] for a in A}, **{f"R{a}{b}":[0,"-"] for a in A for b in A}) # code is A/Rfloat(proposer offer)float(responder offer)
-        # responder constraints: beta_r[i][0] + sum([beta_r[ij][0] for j in A]) == 1 for  each i in A
 
-        beta_p, beta_r = generate_initial_points(beta_p_zeroed, beta_r_zeroed, A)
-
-
-        # beta_p = [1 if i == beta_p_idx else 0 for i in range(len(S_p))]
-        # beta_r = [1 if i == beta_r_idx else 0 for i in range(len(S_r))]
+        # generate possible initial realization plan from sequence-form polytope corresponding to action set A, Q(A)
+        beta_p, beta_r = generate_initial_points(beta_p_zeroed, beta_r_zeroed, A, pure=True)
 
         prev_p = [beta_p]
         prev_r = [beta_r]
+
+        # initial check
+        for i,a in enumerate(A):
+                counter =0
+                for b in A[1:]:
+                    if beta_p[f"{a}"][1][f"A{A[0]}"][0] > ((1-b)/(1-A[0]))*beta_p[f"{a}"][1][f"A{b}"][0]:
+                        counter = counter + 1
+                if counter == len(A)-1:
+                    print(f"Condition met for first round offer {a} in initial conditions.")
+
+        accumulation_condition = [0 for a in A]
+
+        proposer_mass = []
 
         for t in tqdm.tqdm(range(int(T))):
 
             r_p_t_p_1 = agent_update(prev_r,A=A,delta=delta, M=M)
             r_r_t_p_1 = agent_update(prev_p,A=A,delta=delta, M=M, responder=True)
+            # checking for responder acumulation condition
+            for i,a in enumerate(A):
+                if accumulation_condition[i] == 1:
+                    continue 
+                counter =0
+                for b in A[1:]:
+                    if r_p_t_p_1[f"{a}"][1][f"A{A[0]}"][0] > ((1-b)/(1-A[0]))*r_p_t_p_1[f"{a}"][1][f"A{b}"][0]:
+                        # print(r_p_t_p_1[f"{a}"][1][f"A{A[0]}"][0])
+                        # print(r_p_t_p_1[f"{a}"][1][f"A{b}"][0])
+                        counter = counter + 1
+                if counter == len(A)-1:
+                    print(f"Condition met for first round offer {a} at time step {t}.")
+                    accumulation_condition[i] = 1
 
-            # print(r_p_t_p_1)
-
-            # print(f"r_f_t_p_1 support: {get_support(r_f_t_p_1, S_p)}")
-            # print(f"r_c_t_p_1 support: {get_support(r_c_t_p_1, S_r)}")
-
+            # if t < 100:
+            #     print(r_p_t_p_1)
+            #     print(r_r_t_p_1)
+            #     print()
+            # else:
+            #     exit()
             prev_p.append(r_p_t_p_1)
             prev_r.append(r_r_t_p_1)
+
+            proposer_mass_t = [r_p_t_p_1[f"{a}"][0] for a in A]
+            proposer_mass.append(proposer_mass_t)
 
             # if check_NE(r_f_t_p_1,r_c_t_p_1,S_p,delta):
             #     break
 
-        print(f"RUN {n}/10 RESULTS")
+        print(f"RUN {n+1}/10 RESULTS")
         
         print("----initial parameters----")
         print(f"beta_p: {beta_p}")
@@ -274,127 +303,27 @@ if __name__ == "__main__":
         print(f"NE: {NE_check}")
         print("--------------------------")
         print()
-
-    # intitial_strategies.append((beta_p,beta_r))
-    # final_strategies.append((r_f_t_p_1, r_c_t_p_1))
-
-    # f_final_1, f_final_2 = get_support(r_f_t_p_1,S_p)[0]
-    # c_final_1, c_final_2 = get_support(r_c_t_p_1,S_r)[0]
-
-    # if NE_check == False:
-    #     c=-1
-    # elif f_final_1 == c_final_1:
-    #     c = f_final_1
-    # else:
-    #     c = delta * (1-c_final_2)
-
-    # plotting initial vs. final conditions
-    # P_first_round_initial = []
-    # R_first_round_initial = []
-    # P_second_round_initial = []
-    # R_second_round_initial = []
-    # P_first_round_final = []
-    # R_first_round_final = []
-    # P_second_round_final = []
-    # R_second_round_final = []
-    # P_alpha_first_round_initial = []
-    # R_alpha_first_round_initial = []
-    # P_alpha_second_round_initial = []
-    # R_alpha_second_round_initial = []
-    # proposer_payoffs = []
-
-    # for initial, final, alpha in zip(intitial_strategies, final_strategies, alpha_points):
-    #     R_first_round_initial.append(get_support(initial[1],S_r)[0][0])
-    #     P_first_round_initial.append(get_support(initial[0],S_p)[0][0])
-    #     R_alpha_first_round_initial.append(get_support(alpha[1],S_r)[0][0])
-    #     P_alpha_first_round_initial.append(get_support(alpha[0],S_p)[0][0])
-
-    #     R_second_round_initial.append(get_support(initial[1],S_r)[0][1])
-    #     P_second_round_initial.append(get_support(initial[0],S_p)[0][1])
-    #     R_alpha_second_round_initial.append(get_support(alpha[1],S_r)[0][1])
-    #     P_alpha_second_round_initial.append(get_support(alpha[0],S_p)[0][1])
-
-    #     R_first_round_final.append(get_support(final[1],S_r)[0][0])
-    #     P_first_round_final.append(get_support(final[0],S_p)[0][0])
-
-    #     R_second_round_final.append(get_support(final[1],S_r)[0][1])
-    #     P_second_round_final.append(get_support(final[0],S_p)[0][1])
-
-
-
-        # if check_NE(final[0],final[1],S_r,delta) == False:
-        #     c=-1
-        # elif P_first_round_final[-1] == R_first_round_final[-1]:
-        #     c = 1-P_first_round_final[-1]
-        # else:
-        #     c = delta * R_second_round_final[-1]
-
-        # proposer_payoffs.append(c)
-
-    # computing average payoffs
-    
-
-    # colors_reshaped = np.zeros((5,5,5,5))
-    # for n_f in range(D):
-    #     for n_c in range(D):
-    #         colors_reshaped[n_f][n_c] = colors[n_f*D + n_c]
         
-    # # plotting
-    # # color = plt.cm.rainbow(np.linspace(0, 1, N))
-    # fig, ax = plt.subplots()
-    # fig.suptitle("Initial strategies vs. average responder payoff value at NE")
-    # values=ax.imshow(average_payoffs)
-    # ax.set_xticks(np.arange(len(indices)), labels=[o for o in set(R_second_round_initial)])
-    # ax.set_yticks(np.arange(len(indices)), labels=[at for at in set(R_first_round_initial)])
+        # todo plot if we find set up that converges to different NE
+        time_start = 1
+        time_end = T
 
-    # # ax2.imshow(colors_reshaped)
-    # # ax2.set_xticks(np.arange(N), labels=[i/D for i in range(N)])
-    # # ax2.set_yticks(np.arange(N), labels=[(N-i)/D for i in range(N)])
+        #proposer
+        # all_f_cdfs = []   
+        # for w_f in prev_f[time_start:time_end]:
+        #     cdf_at_t = [1-get_cdf(w_f,i) for i in range(len(w_f))]
+        #     all_f_cdfs.append(cdf_at_t)
 
-    # plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-    #      rotation_mode="anchor")
+        fig, ax = plt.subplots(1, 1, figsize = (6, 6))
+        def animate(t):
+            ax.cla() # clear the previous image
+            # ax.set_title(f"Proposer initial={get_support(beta_f,S_f)}, Responder initial={get_support(beta_c,S_c)}, M={M}, T={T}")
+            # ax.plot(S_c,all_cdfs[t], label="Responder",color="blue")
+            ax.plot(A,proposer_mass[t], label="Proposer",color="blue")
+            # ax.scatter([proposer_final_most_mass], [1], label=f"NE point: {proposer_final_most_mass}", color="black")
+            ax.legend()
 
-    # # plt.setp(ax2.get_xticklabels(), rotation=45, ha="right",
-    # #      rotation_mode="anchor")
-
-    # for i in range(len(indices)):
-    #     for j in range(len(indices)):
-    #         if round(average_payoffs[i, j],3) == -1:
-    #             text = ax.text(j, i, "N/A",
-    #                     ha="center", va="center", color="w")
-    #         else:
-    #             continue
-
-    # fig.colorbar(values,ax=ax)
-    #         # text = ax2.text(j, i, round(colors_reshaped[i, j],3),
-    #         #             ha="center", va="center", color="w")
-    # # for i, c in enumerate(color):
-    # #     #first round
-        
-    #     # ax1.scatter(P_first_round_initial[i], R_first_round_initial[i], color=c, label= "Initial Strategies")
-    #     # ax1.scatter(P_alpha_first_round_initial[i], R_alpha_first_round_initial[i], color=c, marker="+", label = "Reference Points")
-    #     # ax1.scatter(P_first_round_final[i], R_first_round_final[i], color=c,marker = "x", label="Final Strategies")
-
-    #     #second round
-    #     # ax2.scatter(P_second_round_initial[i], R_second_round_initial[i], color=c, label= "Initial Strategies")
-    #     # ax2.scatter(P_alpha_second_round_initial[i], R_alpha_second_round_initial[i], color=c, marker="+", label = "Reference Points")
-    #     # ax2.scatter(P_second_round_final[i], R_second_round_final[i], color=c, marker="x", label="Final Strategies")
-    
-    # # ax1.plot(np.arange(0,1,0.1), np.arange(0,1,0.1), "k--") # agreement reference line
-    # # ax.title.set_text("First round")
-    # # ax1.legend()
-    # ax.set_ylabel("Responder First Round Strategy - Acceptance Threshold Values")
-    # ax.set_xlabel("Responder Second Round Strategy - Offer Values")
-    # # ax1.set_xlim((0,1))
-    # # ax1.set_ylim((0,1))
-
-    # # ax2.plot(np.arange(0,1,0.1), np.arange(0,1,0.1), "k--") # agreement reference line
-    # # ax2.title.set_text("Second round")
-    # # # ax2.legend()
-    # # ax2.set_xlabel("Proposer Strategy Values")
-    # # # ax2.set_ylabel("Responder Strategy Values")
-    # # # ax2.set_xlim((0,1))
-    # # # ax2.set_ylim((0,1))
-
-    # plt.show()
+        anim = animation.FuncAnimation(fig, animate, frames = time_end-time_start, interval = 5, blit = False)
+        anim.save(f'n={n}_proposer_first_round_offer_pdf.gif', writer='Pillow', fps=30)
+        plt.show()
 
