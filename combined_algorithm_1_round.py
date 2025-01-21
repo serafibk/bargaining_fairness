@@ -32,7 +32,8 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, responder= False,t=0):
     # if not responder and t > 370:
         # print(utility_feedback_vector)
     objective = cp.Maximize(w_var@utility_feedback_vector - cp.norm(w_var, 2)**2/(2*M))
-    constraints = [cp.sum(w_var)==1, cp.min(w_var)>=0]#cp.sum_largest(w_var,8) <= 0.98]
+    constraints = [w_var[i] >= 0 for i in range(len(S_i))]# cp.min(w_var)>=0,cp.sum_largest(w_var,8) <= 0.98]
+    constraints.append(cp.sum(w_var)==1)
     problem = cp.Problem(objective,constraints)
 
     problem.solve()
@@ -105,9 +106,9 @@ def get_cdf(w,idx): # sum probability mass up until and including idx
 
 if __name__ == "__main__":
 
-    T =1000 # time steps
+    T =2000 # time steps
     M = 0.5#T**(1/4) # regularizer constant
-    D = 25
+    D = 50
 
     N = 8
 
@@ -121,28 +122,36 @@ if __name__ == "__main__":
         alpha_f_idx = 0#np.random.randint(len(S_f))
         alpha_c_idx = 0#np.random.randint(len(S_c))
 
-        beta_f = [0.5 if i == beta_f_idx or i == beta_c_idx else 0 for i in range(len(S_f))]
-        beta_c = [0.5 if i == beta_c_idx or i == beta_f_idx else 0 for i in range(len(S_c))]
+        beta_f = [1 if i == beta_f_idx else 0 for i in range(len(S_f))]
+        beta_c = [1 if i == beta_c_idx else 0 for i in range(len(S_c))]
+        # beta_c[0] = 0.5
+        # beta_c[1] = 0.375
         alpha_f = [1 if i == alpha_f_idx else 0 for i in range(len(S_f))]
         alpha_c = [1 if i == alpha_c_idx else 0 for i in range(len(S_c))]
 
         prev_f = [beta_f]
         prev_c = [beta_c]
-
+        found = 0
         for t in tqdm.tqdm(range(T)):
 
             w_f_t_p_1 = agent_update(prev_c,S_i=S_f,alpha_i=alpha_f, M=M, t=t)
             w_c_t_p_1 = agent_update(prev_f,S_i=S_c,alpha_i=alpha_c, M=M, responder=True,t=t)
-        
 
-            # 
-            if t < 20:
-                print([round(w,9) for w in w_c_t_p_1])
-                print(f"w_c_t_p_1 support: {get_support([round(w,9) for w in w_c_t_p_1], S_c)}")
-                print([round(w,9) for w in w_f_t_p_1])
-                print(f"w_f_t_p_1 support: {get_support([round(w,9) for w in w_f_t_p_1], S_f)}")
-            else:
-                break
+            rounded_w_f = [round(w,8) for w in w_f_t_p_1]
+            rounded_w_c = [round(w,8) for w in w_c_t_p_1]
+            a_r_pls_idx = np.argmax(get_support(rounded_w_c, S_c))
+            a_p_pls_idx = np.argmax([i if m > 0 else 0 for i,m in enumerate(rounded_w_f)])
+
+            
+            if rounded_w_c[a_r_pls_idx] > 1/(D-a_r_pls_idx+2) and a_r_pls_idx == a_p_pls_idx and not found:
+                print(a_r_pls_idx)
+                print(a_p_pls_idx)
+                print([i if m > 0 else 0 for i,m in enumerate(get_support(rounded_w_f, S_f))])
+                print(f"w_c: {rounded_w_c}")
+                print(f"w_f: {rounded_w_f}")
+                found = 1
+                    
+
             # else:
             #     break
             # print(f"w_f_t_p_1 support: {get_support(w_f_t_p_1, S_f)}")
@@ -160,7 +169,11 @@ if __name__ == "__main__":
         # print(f"alpha_c: { get_support(alpha_c,S_c)}")
     
 
-        # print("----final convergence----")
+        print("----final convergence----")
+        print([round(w,9) for w in w_c_t_p_1])
+        print(f"w_c_t_p_1 support: {get_support([round(w,9) for w in w_c_t_p_1], S_c)}")
+        print([round(w,9) for w in w_f_t_p_1])
+        print(f"w_f_t_p_1 support: {get_support([round(w,9) for w in w_f_t_p_1], S_f)}")
         # print(f"w_f_T: {w_f_t_p_1}")
         # print("--non-zero support--")
         # print(get_support(w_f_t_p_1, S_f))
