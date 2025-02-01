@@ -3,7 +3,22 @@ import numpy as np
 import itertools
 import tqdm
 import matplotlib.pyplot as plt
+import re
 
+def NE_check(w_f,w_c, S):
+
+    utilities = []
+    for i in range(len(S)):
+        if i <= np.argmax(w_f):
+            utilities.append(sum([w_c[j] for j in range(i+1)])*(1-S[i]))
+    
+    # print(utilities)
+    if np.argmax(utilities) == np.argmax(w_f):
+        return True
+    else:
+        # print("here 3")
+        return False
+    
 def check_mixed_NE(w_c,w_f,S):
 
     if 1-max(w_f)>1e-5:
@@ -78,7 +93,7 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, regularizer="euclidean"
 def get_support(w_i, S_i):
     return [S_i[i] for i in range(len(w_i)) if w_i[i] > 0]
 
-def check_convergence(w_f_t_p_1, w_c_t_p_1, prev_f, prev_c, t, window_size=10, convergence_threshold=1e-10, fast=False):
+def check_convergence(w_f_t_p_1, w_c_t_p_1, prev_f, prev_c, t, window_size=10, convergence_threshold=1e-8, fast=False):
     if t >= window_size:
         f_converged = all(np.linalg.norm(np.array(w_f_t_p_1) - np.array(prev_f[-i])) < convergence_threshold for i in range(1, window_size + 1))
         c_converged = all(np.linalg.norm(np.array(w_c_t_p_1) - np.array(prev_c[-i])) < convergence_threshold for i in range(1, window_size + 1))
@@ -223,9 +238,184 @@ def print_final_convergence(w_f_t_p_1, w_c_t_p_1, S_f, S_c):
     print("--non-zero support--")
     print(get_support(w_c_t_p_1, S_c))
 
+
+def generate_imshow(M, D, T, alpha_c_i=None, alpha_f_i=None):
+    # DxD matrix
+    payoffs = np.zeros((D+1, D+1))
+
+    S_f = [i / (D) for i in range(D + 1)]
+    S_c = [i / (D) for i in range(D + 1)]
+
+    for s_f in range(D+1):
+        for s_c in range(D+1):
+            print(f"candidate strategy {(S_c[s_c])}, firm strategy {(S_f[s_f])}")
+        
+            beta_c_idx = s_c
+            beta_f_idx = s_f
+            alpha_f_idx = alpha_f_i if alpha_f_i else -1
+            alpha_c_idx = alpha_c_i if alpha_c_i else -1
+
+            beta_f = [1 if i == beta_f_idx else 0 for i in range(len(S_f))]
+            beta_c = [1 if i == beta_c_idx else 0 for i in range(len(S_c))]
+            alpha_f = [1 if i == alpha_f_idx else 0 for i in range(len(S_f))]
+            alpha_c = [1 if i == alpha_c_idx else 0 for i in range(len(S_c))]
+
+            prev_f = [beta_f]
+            prev_c = [beta_c]
+
+            for t in tqdm.tqdm(range(T)):
+                w_f_t_p_1 = agent_update(prev_c, S_i=S_f, alpha_i=alpha_f, M=M, solver=solver)
+                w_c_t_p_1 = agent_update(prev_f, S_i=S_c, alpha_i=alpha_c, M=M, solver=solver, responder=True)
+
+                # print(f"w_f_t_p_1 support: {get_support(w_f_t_p_1, S_f)}")
+                # print(f"w_c_t_p_1 support: {get_support(w_c_t_p_1, S_c)}")
+
+                # if np.argmax(w_f_t_p_1) >= np.argmax(w_c_t_p_1):
+                #     print(f"Offer likely accepted at time {t}: {np.argmax(w_f_t_p_1)}.")
+
+                # Check convergence - use the past 10 strats & threshold 1e-7 by default
+
+                if check_convergence(w_f_t_p_1, w_c_t_p_1, prev_f, prev_c, t):
+                    print(f"Converged after {t} iterations.")
+                    break
+
+                prev_f.append(w_f_t_p_1)
+                prev_c.append(w_c_t_p_1)
+ 
+            print("----initial parameters----")
+            print(f"beta_f: {get_support(beta_f,S_f)}")
+            print(f"beta_c: {get_support(beta_c,S_c)}")
+            print(f"alpha_f: {get_support(alpha_f,S_f)}")
+            print(f"alpha_c: { get_support(alpha_c,S_c)}")
+        
+
+            print("----final convergence----")
+            print(f"w_f_T: {w_f_t_p_1}")
+            print("--non-zero support--")
+            print(get_support(w_f_t_p_1, S_f))
+            print(f"w_c_T: {w_c_t_p_1}")
+            print("--non-zero support--")
+            print(get_support(w_c_t_p_1, S_c))
+
+            check_NE = NE_check(w_f_t_p_1,w_c_t_p_1, S_f)
+
+            # print(f"NE: {NE_check}")
+
+            if check_NE == False:
+                firm_offer=-1
+            else:
+                max_firm = max(w_f_t_p_1)
+                tied_firm = [ind for ind, ele in enumerate(w_f_t_p_1) if ele == max_firm]
+                firm_offer = S_f[min(tied_firm)]
+                print("Firm offer: ", firm_offer)
+
+            payoffs[s_f][s_c] = firm_offer
+
+    with open("imshows_1_round.txt", "a") as f:
+        # Write data to the file
+        msg = '\nD: ' + str(D) + ' M: ' + str(M) + ' T: ' + str(T) + ' alpha_c_idx: ' + str(alpha_c_idx) + ' alpha_f_idx: ' + str(alpha_f_idx) + '\n'
+        f.write(msg)
+        for arr in payoffs:
+            f.write(str(arr))
+            f.write('\n')
+        f.write('\n')
+
+
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(10, 8))
+    im = ax.imshow(payoffs, cmap='viridis', origin='lower')
+    
+    # Add colorbar
+    cbar = plt.colorbar(im)
+    cbar.set_label('Average Payoff', rotation=270, labelpad=15)
+    
+    # Set labels and title
+    ax.set_xlabel('Candidate Initial Strategy')
+    ax.set_ylabel('Firm Initial Strategy')
+    title = f"Average Payoffs (η={M:.4f}, D={D}, T={T}"
+    if alpha_f_i:
+        title+=f', alpha_f: {S_f[alpha_f_idx]}'
+    if alpha_c_i:
+        title+=f', alpha_c: {S_c[alpha_c_idx]}'
+    if not alpha_f_i and not alpha_c_i:
+        title+=', No Reference'
+    title+=')'
+    ax.set_title(title)
+    
+    # Set tick labels
+    ax.set_xticks(np.arange(0, D+1, D//5))
+    ax.set_yticks(np.arange(0, D+1, D//5))
+    ax.set_xticklabels([f"{S_c[i]:.2f}" for i in range(0, D+1, D//5)])
+    ax.set_yticklabels([f"{S_f[i]:.2f}" for i in range(0, D+1, D//5)])
+    
+    plt.tight_layout()
+    plt.show()
+
+
+def generate_imshow_from_file(filename):
+    with open(f"{filename}.txt", "r") as f:
+        # read D, M, T, alpha_c_idx, alpha_f_idx from the file and store
+        first_line = f.readline().strip().split()
+        D = int(first_line[1])
+        M = float(first_line[3])
+        T = int(first_line[5])
+        alpha_c_idx = int(first_line[7])
+        alpha_f_idx = int(first_line[9])
+        S_f = [i / (D) for i in range(D + 1)]
+        S_c = [i / (D) for i in range(D + 1)]
+        # msg = '\nD: ' + str(D) + ' M: ' + str(M) + ' T: ' + str(T) + ' alpha_c_idx: ' + str(alpha_c_idx) + ' alpha_f_idx: ' + str(alpha_f_idx) + '\n'
+        # read each line as an array in the file and store in payoffs[line_index]
+        payoffs = np.zeros((D+1, D+1))
+        content=f.read()
+        arrays = re.findall(r'\[([\s\S]*?)\]', content)
+
+        # Initialize payoffs array
+        payoffs = np.zeros((D+1, D+1))
+
+        # Process each array
+        for i, array_str in enumerate(arrays):
+            # Remove newlines and split the array string into values
+            values = array_str.replace('\n', '').split()
+            # Convert string values to float and store in payoffs array
+            payoffs[i] = [float(val) for val in values]
+        # for i, line in enumerate(f):
+        #     # Remove brackets and split the line into values
+        #     values = line.strip()[1:-1].split()
+        #     # Convert string values to float and store in payoffs array
+        #     payoffs[i] = [float(val) for val in values]
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(10, 8))
+    im = ax.imshow(payoffs, cmap='viridis', origin='lower')
+    
+    # Add colorbar
+    cbar = plt.colorbar(im)
+    cbar.set_label('Average Payoff', rotation=270, labelpad=15)
+    
+    # Set labels and title
+    ax.set_xlabel('Candidate Initial Strategy')
+    ax.set_ylabel('Firm Initial Strategy')
+    title = f"Average Payoffs (η={M:.4f}, D={D}, T={T}"
+    if alpha_f_idx!=-1:
+        title+=f', alpha_f: {S_f[alpha_f_idx]:.2f}'
+    if alpha_c_idx!=-1:
+        title+=f', alpha_c: {S_c[alpha_c_idx]:.2f}'
+    if alpha_f_idx==-1 and alpha_c_idx==-1:
+        title+=', No Reference'
+    title+=')'
+    ax.set_title(title)
+    
+    # Set tick labels
+    ax.set_xticks(np.arange(0, D+1, D//5))
+    ax.set_yticks(np.arange(0, D+1, D//5))
+    ax.set_xticklabels([f"{S_c[i]:.2f}" for i in range(0, D+1, D//5)])
+    ax.set_yticklabels([f"{S_f[i]:.2f}" for i in range(0, D+1, D//5)])
+    
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == "__main__":
-    T = 250  # time steps
-    D = 50 # range 50-100 (fix in run sim)
+    T = 350  # time steps
+    D = 30 # range 50-100 (fix in run sim)
     M = 1 / (T**(1/4.0))  # regularizer constant
     
     # add manual input for initial conditions for early convergences (not pure firm)
@@ -234,7 +424,7 @@ if __name__ == "__main__":
     strategy = f"manual {idxf} {idxc}"
 
     # strategy = None
-    reference = None
+    reference = "Fixed 0 1"
     solver = None
     S_f = [i / (D) for i in range(D + 1)]
     S_c = [i / (D) for i in range(D + 1)]
@@ -242,9 +432,12 @@ if __name__ == "__main__":
     all_runs_results = []
     purity_threshold = 5e-7
     # Run multiple simulations
-    num_runs = 5
+    num_runs = 0
     pure_count = 0
     ne_convergence_data = []
+    # generate_imshow(M, D, T, alpha_f_i=D, alpha_c_i=D)
+    generate_imshow_from_file('imshows_1_round_regen')
+    exit()
     for _ in range(num_runs):
         pure = False
         run_results = run_simulation(S_f, S_c, T=T, M=M, strategy=strategy, solver=solver, reference=reference)
@@ -298,4 +491,5 @@ if __name__ == "__main__":
         # print mixed strats at end
     # print("Installed solvers:", cp.installed_solvers())
     # plot_max_strategies(all_runs_results, S_f, S_c)
+
 
