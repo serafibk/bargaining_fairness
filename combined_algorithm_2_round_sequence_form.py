@@ -21,8 +21,8 @@ def agent_update(prev_not_i_strategies, A, delta, M, responder= False):
                 for j,b in enumerate(A):
                     utility_feedback_vector[len(A)*(i+1)+j] += delta * b * r_r[f"R{a}{b}"][0] # accepts counter offer from responder       
         
-        # for i,a in enumerate(A):
-        #     print(f"first round offer:{a}, total cumulative utility: {utility_feedback_vector[i] +sum([utility_feedback_vector[len(A)*(i+1)+j] for j in range(len(A))]) }")
+        for i,a in enumerate(A):
+            print(f"first round offer:{a}, total cumulative utility: {utility_feedback_vector[i] +sum([utility_feedback_vector[len(A)*(i+1)+j] for j in range(len(A))]) }")
 
         # set up problem
         r_var = cp.Variable(len(A)+2*len(A)**2)
@@ -70,6 +70,7 @@ def agent_update(prev_not_i_strategies, A, delta, M, responder= False):
     
     if responder == False: # proposer
         r_t_p_1 = {f"{a}" : [mass_values[i],dict({f"A{b}": [mass_values[(i+1)*len(A)+j]] for j,b in enumerate(A)}.items(), **{f"R{b}":[mass_values[(i+1)*len(A)+len(A)**2+j]] for j,b in enumerate(A)})] for i,a in enumerate(A)}
+        print("max first offer mass:",A[np.argmax([r_t_p_1[f"{a}"][0] for a in A])])
     else: # responder
         r_t_p_1 = dict({f"A{a}":[mass_values[i]] for i,a in enumerate(A)}, **{f"R{a}{b}":[mass_values[len(A)*(i+1)+j]] for i,a in enumerate(A) for j,b in enumerate(A)})
 
@@ -98,7 +99,7 @@ def check_pure_NE(r_p,r_r, A,delta):
         print("no pure first round offer from the proposer found, manually check for other kinds of NE")
         return False
 
-    # check best-response of this first round offer
+    # check best-response of this first round offer -- todo need to get total utility in each branch, not just acceptance
     for a in A[:A.index(first_round_offer)]: # check all lower offers don't give more utility (assuming first_round_offer is pure)
         if np.abs(1-r_r[f"A{a}"][0]) <eps:
             print("smaller offer would be approx purely accepted, proposer first round offer is not best-response")
@@ -221,7 +222,7 @@ if __name__ == "__main__":
     T = 1000 # time steps
     delta = 0.9 # time discount factor
     M = 0.5 # learning rate
-    D = 5 # discretization constant
+    D = 4 # discretization constant
 
     A = [i/D for i in range(1,D+1)] # action list for offers {1/D, ... , 1}
 
@@ -229,13 +230,13 @@ if __name__ == "__main__":
     for n in range(4,5): # try 20 random initializations
 
         # initial strategies as realization plans now -- note that '-' could be used later on for recursive setting for n rounds of bargaining 
-        # beta_p_zeroed = {f"{a}" : [0,dict({f"A{b}": [0,"-"] for b in A}.items(), **{f"R{b}":[0,"-"] for b in A})] for a in A} # code is float(offer)A/Rfloat(responder offer)
-        # beta_r_zeroed = dict({f"A{a}":[0,"-"] for a in A}, **{f"R{a}{b}":[0,"-"] for a in A for b in A}) # code is A/Rfloat(proposer offer)float(responder offer)
+        beta_p_zeroed = {f"{a}" : [0,dict({f"A{b}": [0,"-"] for b in A}.items(), **{f"R{b}":[0,"-"] for b in A})] for a in A} # code is float(offer)A/Rfloat(responder offer)
+        beta_r_zeroed = dict({f"A{a}":[0,"-"] for a in A}, **{f"R{a}{b}":[0,"-"] for a in A for b in A}) # code is A/Rfloat(proposer offer)float(responder offer)
 
         # generate possible initial realization plan from sequence-form polytope corresponding to action set A, Q(A)
-        # beta_p, beta_r = generate_initial_points(beta_p_zeroed, beta_r_zeroed, A, pure=True)
-        beta_p= {'0.2': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}], '0.4': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}], '0.6': [1, {'A0.2': [0, '-'], 'A0.4': [1, '-'], 'A0.6': [1, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [1, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [1, '-'], 'R1.0': [1, '-']}], '0.8': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}], '1.0': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}]}
-        beta_r= {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.20.2': [0, '-'], 'R0.20.4': [0, '-'], 'R0.20.6': [0, '-'], 'R0.20.8': [1, '-'], 'R0.21.0': [0, '-'], 'R0.40.2': [0, '-'], 'R0.40.4': [1, '-'], 'R0.40.6': [0, '-'], 'R0.40.8': [0, '-'], 'R0.41.0': [0, '-'], 'R0.60.2': [0, '-'], 'R0.60.4': [0, '-'], 'R0.60.6': [1, '-'], 'R0.60.8': [0, '-'], 'R0.61.0': [0, '-'], 'R0.80.2': [0, '-'], 'R0.80.4': [0, '-'], 'R0.80.6': [1, '-'], 'R0.80.8': [0, '-'], 'R0.81.0': [0, '-'], 'R1.00.2': [0, '-'], 'R1.00.4': [0, '-'], 'R1.00.6': [0, '-'], 'R1.00.8': [1, '-'], 'R1.01.0': [0, '-']}
+        beta_p, beta_r = generate_initial_points(beta_p_zeroed, beta_r_zeroed, A, pure=True)
+        # beta_p= {'0.2': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}], '0.4': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}], '0.6': [1, {'A0.2': [0, '-'], 'A0.4': [1, '-'], 'A0.6': [1, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [1, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [1, '-'], 'R1.0': [1, '-']}], '0.8': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}], '1.0': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}]}
+        # beta_r= {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.20.2': [0, '-'], 'R0.20.4': [0, '-'], 'R0.20.6': [0, '-'], 'R0.20.8': [1, '-'], 'R0.21.0': [0, '-'], 'R0.40.2': [0, '-'], 'R0.40.4': [1, '-'], 'R0.40.6': [0, '-'], 'R0.40.8': [0, '-'], 'R0.41.0': [0, '-'], 'R0.60.2': [0, '-'], 'R0.60.4': [0, '-'], 'R0.60.6': [1, '-'], 'R0.60.8': [0, '-'], 'R0.61.0': [0, '-'], 'R0.80.2': [0, '-'], 'R0.80.4': [0, '-'], 'R0.80.6': [1, '-'], 'R0.80.8': [0, '-'], 'R0.81.0': [0, '-'], 'R1.00.2': [0, '-'], 'R1.00.4': [0, '-'], 'R1.00.6': [0, '-'], 'R1.00.8': [1, '-'], 'R1.01.0': [0, '-']}
 
         prev_p = [beta_p]
         prev_r = [beta_r]
@@ -272,25 +273,25 @@ if __name__ == "__main__":
                     print(f"Condition met for first round offer {a} at time step {t}.")
                     accumulation_condition[i] = 1
 
-            # if t < 100:
-            #     print(r_p_t_p_1)
-            #     print(r_r_t_p_1)
-            #     print()
-            # else:
-            #     exit()
+            if t < 50:
+                print(r_p_t_p_1)
+                print(r_r_t_p_1)
+                print()
+            else:
+                exit()
             prev_p.append(r_p_t_p_1)
             prev_r.append(r_r_t_p_1)
 
-            mass_max_a_idx = np.argmax([r_p_t_p_1[f"{a}"][0] for a in A])
-            max_mass_a = 0.6#A[mass_max_a_idx]
+            # mass_max_a_idx = np.argmax([r_p_t_p_1[f"{a}"][0] for a in A])
+            # max_mass_a = 0.6#A[mass_max_a_idx]
 
-            responder_mass_t = [r_r_t_p_1[f"R{max_mass_a}{a}"][0] for a in A]
-            responder_mass_t.append(r_r_t_p_1[f"A{max_mass_a}"][0])
-            responder_mass.append(responder_mass_t)
+            # responder_mass_t = [r_r_t_p_1[f"R{max_mass_a}{a}"][0] for a in A]
+            # responder_mass_t.append(r_r_t_p_1[f"A{max_mass_a}"][0])
+            # responder_mass.append(responder_mass_t)
 
 
-            proposer_mass_t = [r_p_t_p_1[f"{0.6}"][1][f"A{a}"][0] for a in A]
-            proposer_mass.append(proposer_mass_t)
+            # proposer_mass_t = [r_p_t_p_1[f"{0.6}"][1][f"A{a}"][0] for a in A]
+            # proposer_mass.append(proposer_mass_t)
 
             # if check_NE(r_f_t_p_1,r_c_t_p_1,S_p,delta):
             #     break
@@ -325,17 +326,17 @@ if __name__ == "__main__":
         #     cdf_at_t = [1-get_cdf(w_f,i) for i in range(len(w_f))]
         #     all_f_cdfs.append(cdf_at_t)
 
-        fig, ax = plt.subplots(1, 1, figsize = (6, 6))
-        def animate(t):
-            ax.cla() # clear the previous image
-            # ax.set_title(f"Proposer initial={get_support(beta_f,S_f)}, Responder initial={get_support(beta_c,S_c)}, M={M}, T={T}")
-            # ax.plot(S_c,all_cdfs[t], label="Responder",color="blue")
-            ax.scatter(A,proposer_mass[t], label="Proposer",color="blue")
-            ax.scatter(A+[0], responder_mass[t], label="Responder",color="red") # 0 == Accept condition
-            # ax.scatter([proposer_final_most_mass], [1], label=f"NE point: {proposer_final_most_mass}", color="black")
-            ax.legend()
+        # fig, ax = plt.subplots(1, 1, figsize = (6, 6))
+        # def animate(t):
+        #     ax.cla() # clear the previous image
+        #     # ax.set_title(f"Proposer initial={get_support(beta_f,S_f)}, Responder initial={get_support(beta_c,S_c)}, M={M}, T={T}")
+        #     # ax.plot(S_c,all_cdfs[t], label="Responder",color="blue")
+        #     ax.scatter(A,proposer_mass[t], label="Proposer",color="blue")
+        #     ax.scatter(A+[0], responder_mass[t], label="Responder",color="red") # 0 == Accept condition
+        #     # ax.scatter([proposer_final_most_mass], [1], label=f"NE point: {proposer_final_most_mass}", color="black")
+        #     ax.legend()
 
-        anim = animation.FuncAnimation(fig, animate, frames = time_end-time_start, interval = 5, blit = False)
-        anim.save(f'n={n}_responder_max_mass_response_just_at_0.6_plus_proposer.gif', writer='Pillow', fps=30)
-        plt.show()
+        # anim = animation.FuncAnimation(fig, animate, frames = time_end-time_start, interval = 5, blit = False)
+        # anim.save(f'n={n}_responder_max_mass_response_just_at_0.6_plus_proposer.gif', writer='Pillow', fps=30)
+        # plt.show()
 
