@@ -116,7 +116,7 @@ def check_pure_NE(r_p,r_r, A,delta):
     responder_second_round_utility = []
     proposer_second_round_utility = []
     for a in A:
-        responder_second_round_utility.append(proposer_rejection_strategy[f"A{a}"][0]*delta*(1-a))
+        responder_second_round_utility.append((proposer_rejection_strategy[f"A{a}"][0])/(proposer_rejection_strategy = r_p[f"{first_round_offer}"][0])*delta*(1-a))
         proposer_second_round_utility.append(r_r[f"R{first_round_offer}{a}"][0]*delta*a)
 
     if max(responder_second_round_utility) == responder_first_round_utility:
@@ -154,12 +154,12 @@ def generate_initial_points(beta_p, beta_r, A, pure = False):
         values = []
         remaining_mass = mass
 
-        for i in range(n-1):
-            mass_value = remaining_mass * np.random.random()
+        for i in range(n):
+            mass_value = remaining_mass / n #* np.random.random()
             values.append(mass_value)
-            remaining_mass = remaining_mass - mass_value
+            # remaining_mass = remaining_mass - mass_value
 
-        values.append(remaining_mass) # ensure it adds up to mass
+        # values.append(remaining_mass) # ensure it adds up to mass
         
         return values
     if pure == True: # randomly choose a pure strategy
@@ -234,7 +234,7 @@ if __name__ == "__main__":
         beta_r_zeroed = dict({f"A{a}":[0,"-"] for a in A}, **{f"R{a}{b}":[0,"-"] for a in A for b in A}) # code is A/Rfloat(proposer offer)float(responder offer)
 
         # generate possible initial realization plan from sequence-form polytope corresponding to action set A, Q(A)
-        beta_p, beta_r = generate_initial_points(beta_p_zeroed, beta_r_zeroed, A, pure=True)
+        beta_p, beta_r = generate_initial_points(beta_p_zeroed, beta_r_zeroed, A, pure=False)
         # beta_p= {'0.2': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}], '0.4': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}], '0.6': [1, {'A0.2': [0, '-'], 'A0.4': [1, '-'], 'A0.6': [1, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [1, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [1, '-'], 'R1.0': [1, '-']}], '0.8': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}], '1.0': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}]}
         # beta_r= {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.20.2': [0, '-'], 'R0.20.4': [0, '-'], 'R0.20.6': [0, '-'], 'R0.20.8': [1, '-'], 'R0.21.0': [0, '-'], 'R0.40.2': [0, '-'], 'R0.40.4': [1, '-'], 'R0.40.6': [0, '-'], 'R0.40.8': [0, '-'], 'R0.41.0': [0, '-'], 'R0.60.2': [0, '-'], 'R0.60.4': [0, '-'], 'R0.60.6': [1, '-'], 'R0.60.8': [0, '-'], 'R0.61.0': [0, '-'], 'R0.80.2': [0, '-'], 'R0.80.4': [0, '-'], 'R0.80.6': [1, '-'], 'R0.80.8': [0, '-'], 'R0.81.0': [0, '-'], 'R1.00.2': [0, '-'], 'R1.00.4': [0, '-'], 'R1.00.6': [0, '-'], 'R1.00.8': [1, '-'], 'R1.01.0': [0, '-']}
 
