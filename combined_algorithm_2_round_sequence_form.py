@@ -116,7 +116,7 @@ def check_pure_NE(r_p,r_r, A,delta):
     responder_second_round_utility = []
     proposer_second_round_utility = []
     for a in A:
-        responder_second_round_utility.append((proposer_rejection_strategy[f"A{a}"][0])/(proposer_rejection_strategy = r_p[f"{first_round_offer}"][0])*delta*(1-a))
+        responder_second_round_utility.append((proposer_rejection_strategy[f"A{a}"][0])/(r_p[f"{first_round_offer}"][0])*delta*(1-a))
         proposer_second_round_utility.append(r_r[f"R{first_round_offer}{a}"][0]*delta*a)
 
     if max(responder_second_round_utility) == responder_first_round_utility:
