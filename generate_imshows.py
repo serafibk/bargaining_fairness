@@ -112,7 +112,6 @@ def NE_check_2_rounds(r_p,r_r, A, delta, eps):
 
     # proposer's best responses: 
     # Given the responder's strategy, determine the offer a_i that maximizes the proposer's expected payoff.
-        # any weight that the respodner puts on an offer less than it, it will accept
     p_r1_expected_utility = np.zeros(len(A))
     p_offer_masses = np.zeros(len(A))
     for i,a in enumerate(A):
@@ -147,62 +146,88 @@ def NE_check_2_rounds(r_p,r_r, A, delta, eps):
             max_p_utility = p_cumulative_utility[a]
             max_p_utility_idxs = [i]
 
-    # print(max_p_utility_idxs)
-    # print(p_cumulative_utility)
     p_offer_idx = np.argmax(p_offer_masses)
     p_offer = A[p_offer_idx]
-    print("Proposer's utility for offer ", p_offer, " = ", f"{p_cumulative_utility[p_offer]:.4f}", " with probability ", f"{p_offer_masses[p_offer_idx]:.4f}")
-    print("Highest utility branch = offered: ", p_offer_idx in max_p_utility_idxs)
-    # print(p_cumulative_utility)
+    # check that resp playing best strat for all branches (first round offers) with > eps prob mass
+    if len(max_p_utility_idxs) == 1:
+        print("Proposer's utility for offer ", p_offer, " = ", f"{p_cumulative_utility[p_offer]:.4f}", " with probability ", f"{p_offer_masses[p_offer_idx]:.4f}")
+        print("Highest utility branch = offered: ", p_offer_idx in max_p_utility_idxs)
+        if p_offer_idx not in max_p_utility_idxs:
+            print("Error: Branch with highest probability of being offered is not getting most expected utility")
+            return (False, -1)
+        
+        if abs(1-p_offer_masses[p_offer_idx])<eps:
+            print("Pure NE found for first round!")
+            responder_playing_best_strategy, r_offer_idx = check_responder_playing_best_strategy(A, i, r_r, eps, r_r1_expected_utility, r_r2_expected_utility[A[p_offer_idx]])
+            if responder_playing_best_strategy and r_offer_idx == -1:
+                print("Converge after first round")
+                print("Proposer offers ", p_offer, f" with probability {p_offer_masses[p_offer_idx]:.4f}")
+                print("Responder accepts ", p_offer, " as best response.") 
+                return (True, p_offer)
+        return (False, -1)
+    else:
+        if len(max_p_utility_idxs) > 1:
+            # mixed NE
+            print("Mixed nash equilibrium found!")
+        else:
+            print("No NE found.")
+            return (False, -1)
 
+        r_offer_idx_max = None
+        # check_all_nonzero_masses
+        for i, mass in enumerate(p_offer_masses):
+            if mass > eps:
+                # make sure responder is playing the best strategy in each
+                responder_playing_best_strategy, r_offer_idx = check_responder_playing_best_strategy(A, i, r_r, eps, r_r1_expected_utility, r_r2_expected_utility[A[i]])
+                if not responder_playing_best_strategy:
+                    return (False, -1)
+                if i == p_offer_idx:
+                    r_offer_idx_max = r_offer_idx
+        if not r_offer_idx_max:
+            return (False, -1)
+        elif r_offer_idx_max==-1:
+            # responder's best strategy is to accept
+            print("Converge after first round")
+            print("Proposer offers ", p_offer, f" with probability {p_offer_masses[p_offer_idx]:.4f}")
+            print("Responder accepts ", p_offer, " as best response.")  
+            return (True, p_offer)
+        else:
+            r_offer = A[r_offer_idx_max]
+            print("Responder's offer yield's maximum utility")
+            print("Converge after second round, responder rejects initial offer: ", p_offer)
+            print("Responder counteroffers: ", r_offer, " with probability ", f"{r_r[f"R{p_offer:.2f}{r_offer:.2f}"][0]:.4f}")
+            print("Proposer accepts counteroffer: ", r_offer, " with probability ", f"{(r_p[f"{p_offer:.2f}"][1][f"A{r_offer:.2f}"][0])/(r_p[f"{p_offer:.2f}"][0]):.4f}")
+            return (True, delta*(1-r_offer))
+
+
+def check_responder_playing_best_strategy(A, offer_idx, r_r, eps, r_acc_expected_utility, r_rej_expected_utility):
+    offer = A[offer_idx]
     r_rej_offer_masses = np.zeros(len(A))
     for j,b in enumerate(A):
-        r_rej_offer_masses[j] = r_r[f"R{p_offer:.2f}{b:.2f}"][0]
+        r_rej_offer_masses[j] = r_r[f"R{offer:.2f}{b:.2f}"][0]
+    r_offer_idx = np.argmax(r_rej_offer_masses)
+    r_offer = A[r_offer_idx]
     
     max_r_utility = 0
     max_r_utility_idxs = []
-    for i,b in enumerate(p_r2_expected_utility[p_offer]):
+    for i,b in enumerate(r_rej_expected_utility):
         if abs(b - max_r_utility) < eps:
             max_r_utility_idxs.append(i)
         elif b > max_r_utility:
             max_r_utility = b
             max_r_utility_idxs = [i]
-    r_offer_idx = np.argmax(r_rej_offer_masses)
-    r_offer = A[r_offer_idx]
 
-    if p_offer_idx not in max_p_utility_idxs:
-        print("Error: Branch with highest probability of being offered is not getting most expected utility")
-        return (False, -1)
-    
-    if len(max_p_utility_idxs) == 1 and abs(1-p_offer_masses[p_offer_idx])<eps:
-        print("Pure NE found for first round!")
-    elif len(max_p_utility_idxs) > 1:
-        # mixed NE
-        print("Mixed nash equilibrium found!")
-    else:
-        # print(max_p_utility_idxs)
-        # print(max_r_utility_idxs)
-        # print(r_rej_offer_masses)
-        # print(r_r2_expected_utility[p_offer])
-        print("No nash NE found.")
-        return (False, -1)
-    
-    if(r_r[f"A{p_offer:.2f}"][0]>r_r[f"R{p_offer:.2f}{r_offer:.2f}"][0]):
-        print("Converge after first round")
-        print("Proposer offers ", p_offer, f" with probability {p_offer_masses[p_offer_idx]:.4f}")
-        print("Responder accepts: ", p_offer, f" with probability {1-sum(r_rej_offer_masses):.4f}") 
-        return (True, p_offer)
+    if r_r[f"A{offer:.2f}"][0]>=r_r[f"R{offer:.2f}{r_offer:.2f}"][0]:
+        # verify that utility of accepting > rejecting
+        return (r_acc_expected_utility[r_offer_idx] >= r_rej_expected_utility[r_offer_idx], -1)
     else:
         # verify responder's offer yield's maximum utility
+        # verify that utility of rejecting > accepting
         if r_offer_idx in max_r_utility_idxs:
-            print("Responder's offer yield's maximum utility")
-            print("Converge after second round, responder rejects initial offer: ", p_offer)
-            print("Responder counteroffers: ", r_offer, " with probability ", f"{r_rej_offer_masses[r_offer_idx]:.4f}")
-            print("Proposer accepts counteroffer: ", r_offer, " with probability ", f"{(r_p[f"{p_offer:.2f}"][1][f"A{r_offer:.2f}"][0])/(r_p[f"{p_offer:.2f}"][0]):.4f}")
-            return (True, delta*(1-r_offer))
-        else:
-            print("Error: Responder's branch with highest probability of being counter-offered is not getting most expected utility")
-            return (False, -1)
+            return (r_acc_expected_utility[r_offer_idx] <= r_rej_expected_utility[r_offer_idx], r_offer_idx)
+        print()
+        return (False, None)
+
 
 
 def check_pure_NE(r_p,r_r, A,delta, eps):
@@ -272,6 +297,7 @@ def check_pure_NE(r_p,r_r, A,delta, eps):
             return (False, -2)
 
 
+
 def get_support(w_i,S_i):
 
     # print("----non-zero support----")
@@ -306,87 +332,100 @@ def generate_new_betas(D):
 
 def generate_imshow_two_round(M, D, T, delta, eps, alpha_c_i=None, alpha_f_i=None):
     # (D+1)x(D+1)x(D+1)x(D+1) matrix
-    avg_payoffs = np.zeros((D+1, D+1))
-    # payoffs_to_store = [[[] for _ in range(D+1)] for _ in range(D+1)]
+    # payoffs matrix: payoffs[n_p1]
+    # avg_payoffs = np.zeros((D+1, D+1))
+    payoff_matrix = np.zeros(((D+1)**2, (D+1)**2))
 
     A = [round(i/D,2) for i in range(0,D+1)] # action list for offers {1/D, ... , 1}
 
     # S_f = list(itertools.product([i/D for i in range(D+1)], [i/D for i in range(D+1)]))
     # S_c = list(itertools.product([i/D for i in range(D+1)], [i/D for i in range(D+1)]))
     # print(A)
-    for n_p1 in range(0,D+1):
-        for n_r1 in range(0,D+1):
-            payoffs = []
-            for n_p2 in range(0,D+1):
+    with open("imshows_2_round_verbal.txt", "a") as f:
+        # Write title in file
+        msg = f'\nD: {D} M: {M} T: {T} delta: {delta} epsilon: {eps:.0e}\n' # later add alpha_c_idx: {alpha_c_idx} alpha_f_idx: {alpha_f_idx}
+        f.write(msg)
+        f.write('\n')
+
+    for n_p1 in range(2,D+1):
+        for n_p2 in range(5,D+1):
+            # payoffs = []
+            for n_r1 in range(0,D+1):
                 for n_r2 in range(0,D+1):
-                    beta_p, beta_r = generate_new_betas(D)
-                    # print(beta_p)
                     print(f"candidate strategy indices {(n_r1, n_r2)}, firm strategy indices {(n_p1, n_p2)}")
-
-                    # generate pure strategy
-                    # proposer 
-                    first_offer_idx = n_p1 
-                    second_response_idx = n_p2
-                    beta_p[f"{A[first_offer_idx]:.2f}"][0] = 1
-                    for b in A:
-                        if b <= A[second_response_idx]:
-                            beta_p[f"{A[first_offer_idx]:.2f}"][1][f"A{b:.2f}"][0] = 1
-                        else:
-                            beta_p[f"{A[first_offer_idx]:.2f}"][1][f"R{b:.2f}"][0] = 1
-                    # responder
-                    for a in A:
-                        if a >= A[n_r1]:
-                            beta_r[f"A{a:.2f}"][0] = 1
-                        else:
-                            beta_r[f"R{a:.2f}{A[n_r2]:.2f}"][0]=1
+                    # print(beta_p)
+                    if (n_p1==2 and n_p2 == 5 and n_r1 == 0 and n_r2 == 5):
+                        calc_payoff = -1
+                        continue
+                    else:
+                        beta_p, beta_r = generate_new_betas(D)
+                        y_index = n_p1 * (D+1) + n_p2
+                        x_index = n_r1 * (D+1) + n_r2
                         
-                    prev_p = [beta_p]
-                    prev_r = [beta_r]
-                    for t in tqdm.tqdm(range(T)):
+                        # generate pure strategy
+                        # proposer 
+                        first_offer_idx = n_p1 
+                        second_response_idx = n_p2
+                        beta_p[f"{A[first_offer_idx]:.2f}"][0] = 1
+                        for b in A:
+                            if b <= A[second_response_idx]:
+                                beta_p[f"{A[first_offer_idx]:.2f}"][1][f"A{b:.2f}"][0] = 1
+                            else:
+                                beta_p[f"{A[first_offer_idx]:.2f}"][1][f"R{b:.2f}"][0] = 1
+                        # responder
+                        for a in A:
+                            if a >= A[n_r1]:
+                                beta_r[f"A{a:.2f}"][0] = 1
+                            else:
+                                beta_r[f"R{a:.2f}{A[n_r2]:.2f}"][0]=1
+                            
+                        prev_p = [beta_p]
+                        prev_r = [beta_r]
+                        for t in tqdm.tqdm(range(T)):
 
-                        r_p_t_p_1 = agent_update(prev_r,A=A,delta=delta, M=M)
-                        r_r_t_p_1 = agent_update(prev_p,A=A,delta=delta, M=M, responder=True)
-                        prev_p.append(r_p_t_p_1)
-                        prev_r.append(r_r_t_p_1)
-        
-                    print("----initial parameters----")
-                    # print(f"beta_p: {beta_p}")
-                    # print(f"beta_r: {beta_r}")
+                            r_p_t_p_1 = agent_update(prev_r,A=A,delta=delta, M=M)
+                            r_r_t_p_1 = agent_update(prev_p,A=A,delta=delta, M=M, responder=True)
+                            prev_p.append(r_p_t_p_1)
+                            prev_r.append(r_r_t_p_1)
+            
+                        print("----initial parameters----")
+                        # print(f"beta_p: {beta_p}")
+                        # print(f"beta_r: {beta_r}")
 
-                    print("----final convergence----")
-                    # print(f"w_f_T: {w_f_t_p_1}")
-                    print("--proposer--")
-                    print(r_p_t_p_1)
-                    # print(f"w_c_T: {w_c_t_p_1}")
-                    print("--responder--")
-                    print(r_r_t_p_1)
+                        print("----final convergence----")
+                        # print(f"w_f_T: {w_f_t_p_1}")
+                        print("--proposer--")
+                        print(r_p_t_p_1)
+                        # print(f"w_c_T: {w_c_t_p_1}")
+                        print("--responder--")
+                        print(r_r_t_p_1)
 
-                    NE_check, calc_payoff = check_pure_NE(r_p_t_p_1,r_r_t_p_1,A,delta, eps)
-                    if calc_payoff == -2: 
-                        NE_check, calc_payoff = NE_check_2_rounds(r_p_t_p_1,r_r_t_p_1, A, delta, eps)
-                    print(f"NE: {NE_check}")
-                    print(f"Payoff: {calc_payoff:.4f}")
-                    print("--------------------------")
-                    print()
+                        NE_check, calc_payoff = check_pure_NE(r_p_t_p_1,r_r_t_p_1,A,delta, eps)
+                        if calc_payoff == -2: 
+                            NE_check, calc_payoff = NE_check_2_rounds(r_p_t_p_1,r_r_t_p_1, A, delta, eps)
+                        print(f"NE: {NE_check}")
+                        print(f"Payoff: {calc_payoff:.4f}")
+                        print("--------------------------")
+                        print()
 
                     if calc_payoff >=0 :
-                        payoffs.append(calc_payoff)
+                        # payoffs.append(calc_payoff)
+                        payoff_matrix[y_index, x_index] = calc_payoff
+                        with open("imshows_2_round_verbal.txt", "a") as f:
+                            f.write(f"r({(A[n_r1], A[n_r2])})\t p({(A[n_p1], A[n_p2])})\t payoff: {calc_payoff}\n")
                     else:
-                        with open("imshows_2_round.txt", "a") as f:
+                        with open("imshows_2_round_verbal.txt", "a") as f:
                             # Write data to the file
                             f.write(f"candidate strat idxs {(n_r1, n_r2)}, firm strat idxs {(n_p1, n_p2)} did not converge to NE\n")
                             f.write("proposer: \n")
                             json.dump(r_p_t_p_1, f)
                             f.write("responder: \n")
                             json.dump(r_r_t_p_1, f)
-                            f.write("\nv")
-
-                            
-                        
-            if len(payoffs)>0:
-                avg_payoffs[n_p1][n_r1] = sum(payoffs) / len(payoffs)
-            else:
-                avg_payoffs[n_p1][n_r1] = -1
+                            f.write("\n")
+            # if len(payoffs)>0:
+                # avg_payoffs[n_p1][n_r1] = sum(payoffs) / len(payoffs)
+            # else:
+                # avg_payoffs[n_p1][n_r1] = -1
 
     # Save data to file
     with open("imshows_2_round.txt", "a") as f:
@@ -396,31 +435,101 @@ def generate_imshow_two_round(M, D, T, delta, eps, alpha_c_i=None, alpha_f_i=Non
         # for arr in payoffs:
         #     f.write(str(arr))
         #     f.write('\n')
-        np.savetxt(f, avg_payoffs.reshape(-1, avg_payoffs.shape[-1]), fmt='%.4f')
+        np.savetxt(f, payoff_matrix.reshape(-1, payoff_matrix.shape[-1]), fmt='%.4f')
         f.write('\n')
 
     # Create plots
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(12, 10))
     title = f"Average Responder Payoff Value at NE for Initial Strategies\n(η={M:.2f}, D={D}, T={T}, δ={delta:.2f}, ɛ={eps:.0e})"
     fig.suptitle(title)
 
-    im = ax.imshow(avg_payoffs, cmap='viridis', origin='lower')
-    ax.set_xticks(np.arange(1, D+1, 1))
-    ax.set_yticks(np.arange(1, D+1, 1))
+    im = ax.imshow(payoff_matrix, cmap='viridis', origin='lower')
+    # ax.set_xticks(np.arange(1, D+1, 1))
+    # ax.set_yticks(np.arange(1, D+1, 1))
 
-    ax.set_xticklabels([f"{A[i]:.2f}" for i in range(1, D+1, 1)])
-    ax.set_yticklabels([f"{A[i]:.2f}" for i in range(1, D+1, 1)])
+    # ax.set_xticklabels([f"{A[i]:.2f}" for i in range(1, D+1, 1)])
+    # ax.set_yticklabels([f"{A[i]:.2f}" for i in range(1, D+1, 1)])
+    # fig, ax = plt.subplots(figsize=(10, 8))
 
-    ax.set_xlabel("Responder Round 1 Strategy - Acceptance Threshold Values")
-    ax.set_ylabel("Proposer Round 1 Strategy - Offer Values")
+    # im = ax.imshow(payoff_matrix, cmap='viridis')
 
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+    # Add colorbar
+    plt.colorbar(im, ax=ax, label='Payoff for Responder')
+
+    # Customize x-axis labels
+    x_labels = [f"({A[n_r1]:.2f},{A[n_r2]:.2f})" for n_r1 in range(D+1) for n_r2 in range(D+1)]
+    ax.set_xticks(range(len(x_labels)))
+    ax.set_xticklabels(x_labels, rotation=90, ha='center')
+
+    # Customize y-axis labels
+    y_labels = [f"({A[n_p1]:.2f},{A[n_p2]:.2f})" for n_p1 in range(D+1) for n_p2 in range(D+1)]
+    ax.set_yticks(range(len(y_labels)))
+    ax.set_yticklabels(y_labels)
+
+    ax.set_xlabel("Responder Initial Strategy (Acceptance Threshold, Counter Offer)")
+    ax.set_ylabel("Proposer Initial Strategy (Offer, Acceptance Threshold")
+
+    plt.setp(ax.get_xticklabels(), rotation=90, ha="right", rotation_mode="anchor")
     plt.tight_layout()
-    cbar = plt.colorbar(im)
     # plt.show()
-    plt.savefig(f'img_{title}.png') 
+    plt.savefig(f'img_{title}_mat.png') 
+
+def generate_imshow_from_file(filename):
+    with open(f"{filename}.txt", "r") as f:
+        # read D, M, T, alpha_c_idx, alpha_f_idx from the file and store
+        first_line = f.readline().strip().split()
+        D = int(first_line[1])
+        M = float(first_line[3])
+        T = int(first_line[5])
+        delta = float(first_line[7])
+        eps = float(first_line[9])
+        # alpha_c_idx = int(first_line[7])
+        # alpha_f_idx = int(first_line[9])
+        A = [i / (D) for i in range(D + 1)]
+
+        loaded_data = np.loadtxt(f'{filename}.txt', skiprows=1, dtype=np.float64)
+        print(loaded_data)
+        original_shape = ((D+1)**2, (D+1)**2)
+        payoff_matrix = loaded_data.reshape(original_shape)
+
+        fig, ax = plt.subplots(figsize=(12, 10))
+        title = f"Average Responder Payoff Value at NE for Initial Strategies\n(η={M:.2f}, D={D}, T={T}, δ={delta:.2f}, ɛ={eps:.0e})"
+        fig.suptitle(title)
+
+        im = ax.imshow(payoff_matrix, cmap='viridis', origin='lower')
+        # ax.set_xticks(np.arange(1, D+1, 1))
+        # ax.set_yticks(np.arange(1, D+1, 1))
+
+        # ax.set_xticklabels([f"{A[i]:.2f}" for i in range(1, D+1, 1)])
+        # ax.set_yticklabels([f"{A[i]:.2f}" for i in range(1, D+1, 1)])
+        # fig, ax = plt.subplots(figsize=(12, 10))
+
+        # im = ax.imshow(payoff_matrix, cmap='viridis')
+
+        # Add colorbar
+        plt.colorbar(im, ax=ax, label='Payoff for Responder')
+
+        # Customize x-axis labels
+        x_labels = [f"({A[n_r1]:.2f},{A[n_r2]:.2f})" for n_r1 in range(D+1) for n_r2 in range(D+1)]
+        ax.set_xticks(range(len(x_labels)))
+        ax.set_xticklabels(x_labels, rotation=90, ha='center')
+
+        # Customize y-axis labels
+        y_labels = [f"({A[n_p1]:.2f},{A[n_p2]:.2f})" for n_p1 in range(D+1) for n_p2 in range(D+1)]
+        ax.set_yticks(range(len(y_labels)))
+        ax.set_yticklabels(y_labels)
+
+        ax.set_xlabel("Responder Initial Strategy (Acceptance Threshold, Counter Offer)")
+        ax.set_ylabel("Proposer Initial Strategy (Offer, Acceptance Threshold)")
+
+        plt.setp(ax.get_xticklabels(), rotation=90, ha="right", rotation_mode="anchor")
+        plt.tight_layout()
+        # plt.show()
+        plt.savefig(f'img_{title}_from_file.png') 
+
 
 # generate_imshow_two_round(M=0.5, D=2, T=100, delta=0.9)
 # generate_imshow_two_round(M=0.35, D=4, T=250, delta=0.9)
-# generate_imshow_two_round(M=0.5, D=4, T=2000, delta=0.9, eps=1e-6)
-generate_imshow_two_round(M=0.5, D=5, T=1000, delta=0.9, eps=1e-5)
+# generate_imshow_two_round(M=0.5, D=4, T=1000, delta=0.9, eps=1e-5)
+generate_imshow_two_round(M=0.4, D=5, T=1500, delta=0.9, eps=1e-5)
+# generate_imshow_from_file("imshows_2_round_regen")
