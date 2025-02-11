@@ -7,7 +7,7 @@ import re
 import collections
 import json
 
-def agent_update(prev_not_i_strategies, A, delta, M, responder= False):
+def agent_update(prev_not_i_strategies, A, delta, M, responder= False, prev_strategy=None):
     # updating realization probabilities now
     max_utility_idx = 0
     if responder == False: # proposer
@@ -71,10 +71,11 @@ def agent_update(prev_not_i_strategies, A, delta, M, responder= False):
     
     if responder == False: # proposer
         r_t_p_1 = {f"{a:.2f}" : [mass_values[i],dict({f"A{b:.2f}": [mass_values[(i+1)*len(A)+j]] for j,b in enumerate(A)}.items(), **{f"R{b:.2f}":[mass_values[(i+1)*len(A)+len(A)**2+j]] for j,b in enumerate(A)})] for i,a in enumerate(A)}
+               
     else: # responder
         r_t_p_1 = dict({f"A{a:.2f}":[mass_values[i]] for i,a in enumerate(A)}, **{f"R{a:.2f}{b:.2f}":[mass_values[len(A)*(i+1)+j]] for i,a in enumerate(A) for j,b in enumerate(A)})
     # print("max utility index: ", max_utility_idx)
-    return r_t_p_1
+    return r_t_p_1, mass_values
 
     
 def convert_max_u_idxs(p_idxs, r_idxs, A):
@@ -195,8 +196,8 @@ def NE_check_2_rounds(r_p,r_r, A, delta, eps):
             r_offer = A[r_offer_idx_max]
             print("Responder's offer yield's maximum utility")
             print("Converge after second round, responder rejects initial offer: ", p_offer)
-            print("Responder counteroffers: ", r_offer, " with probability ", f"{r_r[f"R{p_offer:.2f}{r_offer:.2f}"][0]:.4f}")
-            print("Proposer accepts counteroffer: ", r_offer, " with probability ", f"{(r_p[f"{p_offer:.2f}"][1][f"A{r_offer:.2f}"][0])/(r_p[f"{p_offer:.2f}"][0]):.4f}")
+            # print("Responder counteroffers: ", r_offer, " with probability ", f"{r_r[f"R{p_offer:.2f}{r_offer:.2f}"][0]:.4f}")
+            # print("Proposer accepts counteroffer: ", r_offer, " with probability ", f"{(r_p[f"{p_offer:.2f}"][1][f"A{r_offer:.2f}"][0])/(r_p[f"{p_offer:.2f}"][0]):.4f}")
             return (True, delta*(1-r_offer))
 
 
@@ -336,6 +337,7 @@ def generate_imshow_two_round(M, D, T, delta, eps, alpha_c_i=None, alpha_f_i=Non
     # avg_payoffs = np.zeros((D+1, D+1))
     payoff_matrix = np.zeros(((D+1)**2, (D+1)**2))
 
+
     A = [round(i/D,2) for i in range(0,D+1)] # action list for offers {1/D, ... , 1}
 
     # S_f = list(itertools.product([i/D for i in range(D+1)], [i/D for i in range(D+1)]))
@@ -346,9 +348,10 @@ def generate_imshow_two_round(M, D, T, delta, eps, alpha_c_i=None, alpha_f_i=Non
         msg = f'\nD: {D} M: {M} T: {T} delta: {delta} epsilon: {eps:.0e}\n' # later add alpha_c_idx: {alpha_c_idx} alpha_f_idx: {alpha_f_idx}
         f.write(msg)
         f.write('\n')
-
-    for n_p1 in range(2,D+1):
-        for n_p2 in range(5,D+1):
+    epsilon=1e-8
+    
+    for n_p1 in range(0,D+1):
+        for n_p2 in range(0,D+1):
             # payoffs = []
             for n_r1 in range(0,D+1):
                 for n_r2 in range(0,D+1):
@@ -381,12 +384,30 @@ def generate_imshow_two_round(M, D, T, delta, eps, alpha_c_i=None, alpha_f_i=Non
                             
                         prev_p = [beta_p]
                         prev_r = [beta_r]
+                        prev_p_mass = []
+                        prev_r_mass = []
                         for t in tqdm.tqdm(range(T)):
 
-                            r_p_t_p_1 = agent_update(prev_r,A=A,delta=delta, M=M)
-                            r_r_t_p_1 = agent_update(prev_p,A=A,delta=delta, M=M, responder=True)
+                            r_p_t_p_1, mass_p = agent_update(prev_r,A=A,delta=delta, M=M)
+                            r_r_t_p_1, mass_r = agent_update(prev_p,A=A,delta=delta, M=M, responder=True)
+
+                            if t > 1:
+                                firm_change = np.linalg.norm(np.array(mass_p) - np.array(prev_p_mass[-1]))
+                                worker_change = np.linalg.norm(np.array(mass_r) - np.array(prev_r_mass[-1]))
+                                print(f"firm stategy norm change: {firm_change} ")
+                                print(f"worker stategy norm change: {worker_change} ")
+                                if firm_change <= 1e-7 and worker_change <= 1e-6:
+                                    break
+ 
+
+                            prev_p_mass.append(mass_p)
+                            prev_r_mass.append(mass_r)
+                            
+
+                            
                             prev_p.append(r_p_t_p_1)
                             prev_r.append(r_r_t_p_1)
+
             
                         print("----initial parameters----")
                         # print(f"beta_p: {beta_p}")
@@ -493,7 +514,7 @@ def generate_imshow_from_file(filename):
         payoff_matrix = loaded_data.reshape(original_shape)
 
         fig, ax = plt.subplots(figsize=(12, 10))
-        title = f"Average Responder Payoff Value at NE for Initial Strategies\n(η={M:.2f}, D={D}, T={T}, δ={delta:.2f}, ɛ={eps:.0e})"
+        title = f"Worker Payoff Value at NE for Initial Strategies\n(η={M:.2f}, D={D}, T={T}, δ={delta:.2f}, ɛ={eps:.0e})"
         fig.suptitle(title)
 
         im = ax.imshow(payoff_matrix, cmap='viridis', origin='lower')
@@ -507,7 +528,7 @@ def generate_imshow_from_file(filename):
         # im = ax.imshow(payoff_matrix, cmap='viridis')
 
         # Add colorbar
-        plt.colorbar(im, ax=ax, label='Payoff for Responder')
+        plt.colorbar(im, ax=ax, label='Payoff for Worker')
 
         # Customize x-axis labels
         x_labels = [f"({A[n_r1]:.2f},{A[n_r2]:.2f})" for n_r1 in range(D+1) for n_r2 in range(D+1)]
@@ -519,8 +540,8 @@ def generate_imshow_from_file(filename):
         ax.set_yticks(range(len(y_labels)))
         ax.set_yticklabels(y_labels)
 
-        ax.set_xlabel("Responder Initial Strategy (Acceptance Threshold, Counter Offer)")
-        ax.set_ylabel("Proposer Initial Strategy (Offer, Acceptance Threshold)")
+        ax.set_xlabel("Worker Initial Strategy (Acceptance Threshold, Counter Offer)")
+        ax.set_ylabel("Firm Initial Strategy (Offer, Acceptance Threshold)")
 
         plt.setp(ax.get_xticklabels(), rotation=90, ha="right", rotation_mode="anchor")
         plt.tight_layout()
@@ -531,5 +552,5 @@ def generate_imshow_from_file(filename):
 # generate_imshow_two_round(M=0.5, D=2, T=100, delta=0.9)
 # generate_imshow_two_round(M=0.35, D=4, T=250, delta=0.9)
 # generate_imshow_two_round(M=0.5, D=4, T=1000, delta=0.9, eps=1e-5)
-generate_imshow_two_round(M=0.4, D=5, T=1500, delta=0.9, eps=1e-5)
-# generate_imshow_from_file("imshows_2_round_regen")
+# generate_imshow_two_round(M=0.4, D=4, T=1000, delta=0.2, eps=1e-5)
+generate_imshow_from_file("imshows_2_round_regen")
