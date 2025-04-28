@@ -17,33 +17,34 @@ with open(f"{filename}.txt", "r") as f:
     A = [i / (D) for i in range(D + 1)]
 
     loaded_data = np.loadtxt(f'{filename}.txt', skiprows=1, dtype=np.float64)
-    # print(loaded_data.shape)
-    # original_shape = ((D+1)**2, (D+1)**2)
-    # payoff_matrix = loaded_data.reshape(original_shape)
 
-# worker_payoffs = [[0.25,0.3,0.32],[0.31,0.3,0.25], [0.4,0.35,0.2]] # 3x3 game example, firm row player
-N = 3 # number of strategies per player
+ROUND = 1 # change to match number of rounds
+
 worker_payoffs = loaded_data
+if ROUND == 1:
+    A = np.array([[(1-w)-0.5 for c,w in enumerate(row)]for r,row in enumerate(worker_payoffs)]) # input row player values
 
+    meta_game = nash.Game(A)
 
-A = np.array([[(1-w)-0.5 for c,w in enumerate(row)]for r,row in enumerate(worker_payoffs)]) # input row player values
+    # minimax solution
+    f, w = meta_game.linear_program()# returns row strategy, col. strategy
 
-meta_game = nash.Game(A)
+    print("Minimax solution")
+    print(f"firm equilibrium strategy: {f}")
+    print(f"worker equilibrium strategy: {w}")
+    print(f"Value of game: {np.transpose(f)@A@w}")
 
-# minimax solution
-f, w = meta_game.linear_program()# returns row strategy, col. strategy
+if ROUND == 2:
+    firm_payoffs = np.array([[(1-w) for c,w in enumerate(row)]for r,row in enumerate(worker_payoffs)])
 
-print("Minimax solution")
-print(f"firm: {f}")
-print(f"worker: {w}")
-print(f"Value of game: {np.transpose(f)@A@w}")
+    meta_game = nash.Game(firm_payoffs, worker_payoffs)
 
 # support enumeration solution - finds some equilibria of degenerate games
 print("vertex enumeration")
 equilibria = meta_game.vertex_enumeration()
 for eq in equilibria:
     f,w = eq
-    print(f"firm: {f}")
-    print(f"worker: {w}")
-    print(f"Value of game: {np.transpose(f)@A@w}")
+    print(f"firm equilibrium strategy: {f}")
+    print(f"worker equilibrium strategy: {w}")
+    # print(f"Value of game: {np.transpose(f)@A@w}")
 
