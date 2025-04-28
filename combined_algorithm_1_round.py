@@ -54,7 +54,7 @@ def agent_update(prev_not_i_strategies, S_i, alpha_i, M, responder= False,t=0):
 
 
         # w_t_p_1_all = [1 if i == largest else 0 for i in range(len(w_t_p_1_all))]    
-    return w_t_p_1_all
+    return w_t_p_1_all, utility_feedback_vector
 
 
 def check_mixed_NE(w_c,w_f,S):
@@ -106,8 +106,8 @@ def get_cdf(w,idx): # sum probability mass up until and including idx
 
 if __name__ == "__main__":
 
-    T =2000 # time steps
-    M = 0.5#T**(1/4) # regularizer constant
+    T =100 # time steps
+    M = 6000#T**(1/4) # regularizer constant
     D = 50
 
     N = 8
@@ -119,23 +119,31 @@ if __name__ == "__main__":
 
         beta_f_idx = np.random.randint(len(S_f))
         beta_c_idx = np.random.randint(len(S_c))
-        alpha_f_idx = 0#np.random.randint(len(S_f))
-        alpha_c_idx = 0#np.random.randint(len(S_c))
+        alpha_f_idx = np.random.randint(len(S_f))
+        alpha_c_idx = np.random.randint(len(S_c))
 
-        beta_f = [1 if i == beta_f_idx else 0 for i in range(len(S_f))]
-        beta_c = [1 if i == beta_c_idx else 0 for i in range(len(S_c))]
-        # beta_c[0] = 0.5
-        # beta_c[1] = 0.375
+        # beta_f = [1 if i == beta_f_idx else 0 for i in range(len(S_f))]
+        # beta_c = [1 if i == beta_c_idx else 0 for i in range(len(S_c))]
+        beta_f = [1/len(S_f) for i in range(len(S_f))]
+        beta_c = [1/len(S_c) for i in range(len(S_c))]
         alpha_f = [1 if i == alpha_f_idx else 0 for i in range(len(S_f))]
         alpha_c = [1 if i == alpha_c_idx else 0 for i in range(len(S_c))]
 
         prev_f = [beta_f]
         prev_c = [beta_c]
+        u_f_all =[]
+        u_w_all=[]
+        reg_f_all=[]
+        reg_w_all=[]
         found = 0
         for t in tqdm.tqdm(range(T)):
 
-            w_f_t_p_1 = agent_update(prev_c,S_i=S_f,alpha_i=alpha_f, M=M, t=t)
-            w_c_t_p_1 = agent_update(prev_f,S_i=S_c,alpha_i=alpha_c, M=M, responder=True,t=t)
+            w_f_t_p_1, u_f_t = agent_update(prev_c,S_i=S_f,alpha_i=alpha_f, M=M, t=t)
+            w_c_t_p_1, u_w_t = agent_update(prev_f,S_i=S_c,alpha_i=alpha_c, M=M, responder=True,t=t)
+            u_f_all.append(u_f_t)
+            u_w_all.append(u_w_t)
+            reg_f_all.append(np.dot(w_f_t_p_1,u_f_t))
+            reg_w_all.append(np.dot(w_c_t_p_1,u_w_t))
 
             rounded_w_f = [round(w,8) for w in w_f_t_p_1]
             rounded_w_c = [round(w,8) for w in w_c_t_p_1]
@@ -168,6 +176,38 @@ if __name__ == "__main__":
         # print(f"alpha_f: {get_support(alpha_f,S_f)}")
         # print(f"alpha_c: { get_support(alpha_c,S_c)}")
     
+        # regret calculation
+        firm_utility_feedback_vector = np.sum(u_f_all,axis=0)
+        worker_utility_feedback_vector = np.sum(u_w_all,axis=0)
+
+        f_var = cp.Variable(len(S_f))
+        w_var = cp.Variable(len(S_c))
+        firm_objective = cp.Maximize(f_var@firm_utility_feedback_vector)
+        worker_objective = cp.Maximize(w_var@worker_utility_feedback_vector)
+        f_constraints = [f_var[i] >= 0 for i in range(len(S_f))]
+        w_constraints = [w_var[i] >= 0 for i in range(len(S_c))]
+        f_constraints.append(cp.sum(f_var)==1)
+        w_constraints.append(cp.sum(w_var)==1)
+        f_problem = cp.Problem(firm_objective,f_constraints)
+        w_problem = cp.Problem(worker_objective,w_constraints)
+
+        f_problem.solve()
+        w_problem.solve()
+
+        bih_firm = []
+        for i,w_p in enumerate(f_var):
+            probability = max(0.0, w_p.value)
+            bih_firm.append(probability)
+        bih_worker = []
+        for i,w_p in enumerate(w_var):
+            probability = max(0.0, w_p.value)
+            bih_worker.append(probability)
+        
+        print(f"firm regret: {np.dot(bih_firm,firm_utility_feedback_vector) - sum(reg_f_all) }")
+        print(f"worker regret: {np.dot(bih_worker,worker_utility_feedback_vector) - sum(reg_w_all) }")
+
+        
+
 
         print("----final convergence----")
         print([round(w,9) for w in w_c_t_p_1])
@@ -187,14 +227,14 @@ if __name__ == "__main__":
         print(check_mixed_NE([round(w,9) for w in w_c_t_p_1],[round(w,9) for w in w_f_t_p_1], S_f))
         exit()
 
-        # plotting cdf of each agent over time
-        time_start = 1
-        time_end = T
-        # responder
-        all_cdfs = []
-        for w_c in prev_c[time_start:time_end]:
-            cdf_at_t = [get_cdf(w_c,i) for i in range(len(w_c))]
-            all_cdfs.append(cdf_at_t)
+        # # plotting cdf of each agent over time
+        # time_start = 1
+        # time_end = T
+        # # responder
+        # all_cdfs = []
+        # for w_c in prev_c[time_start:time_end]:
+        #     cdf_at_t = [get_cdf(w_c,i) for i in range(len(w_c))]
+        #     all_cdfs.append(cdf_at_t)
 
         # for t in range(len(prev_c[time_start:time_end])):
         #     plt.plot(S_c,all_cdfs[t], label=t,color="blue")
@@ -203,31 +243,31 @@ if __name__ == "__main__":
         # plt.show()
 
 
-        #proposer
-        all_f_cdfs = []   
-        for w_f in prev_f[time_start:time_end]:
-            cdf_at_t = [1-get_cdf(w_f,i) for i in range(len(w_f))]
-            all_f_cdfs.append(cdf_at_t)
+        # #proposer
+        # all_f_cdfs = []   
+        # for w_f in prev_f[time_start:time_end]:
+        #     cdf_at_t = [1-get_cdf(w_f,i) for i in range(len(w_f))]
+        #     all_f_cdfs.append(cdf_at_t)
 
-        proposer_final_most_mass = S_f[np.argmax(w_f_t_p_1)]
+        # proposer_final_most_mass = S_f[np.argmax(w_f_t_p_1)]
 
 
-        # for t in range(len(prev_f[time_start:time_end])):
-        #     plt.plot(S_f,all_f_cdfs[t], label=t,color="red")
-        fig, ax = plt.subplots(1, 1, figsize = (6, 6))
-        def animate(t):
-            ax.cla() # clear the previous image
-            ax.set_title(f"Proposer initial={get_support(beta_f,S_f)}, Responder initial={get_support(beta_c,S_c)}, M={M}, T={T}")
-            ax.scatter(S_c,all_cdfs[t], label="Responder",color="blue")
-            ax.scatter(S_f,all_f_cdfs[t], label="Proposer",color="red")
-            # ax.scatter([proposer_final_most_mass], [1], label=f"NE point: {proposer_final_most_mass}", color="black")
-            ax.legend()
-            # ax.plot(x[:i], y[:i]) # plot the line
-            # ax.set_xlim([x0, tfinal]) # fix the x axis
-            # ax.set_ylim([1.1*np.min(y), 1.1*np.max(y)]) # fix the y axis
+        # # for t in range(len(prev_f[time_start:time_end])):
+        # #     plt.plot(S_f,all_f_cdfs[t], label=t,color="red")
+        # fig, ax = plt.subplots(1, 1, figsize = (6, 6))
+        # def animate(t):
+        #     ax.cla() # clear the previous image
+        #     ax.set_title(f"Proposer initial={get_support(beta_f,S_f)}, Responder initial={get_support(beta_c,S_c)}, M={M}, T={T}")
+        #     ax.scatter(S_c,all_cdfs[t], label="Responder",color="blue")
+        #     ax.scatter(S_f,all_f_cdfs[t], label="Proposer",color="red")
+        #     # ax.scatter([proposer_final_most_mass], [1], label=f"NE point: {proposer_final_most_mass}", color="black")
+        #     ax.legend()
+        #     # ax.plot(x[:i], y[:i]) # plot the line
+        #     # ax.set_xlim([x0, tfinal]) # fix the x axis
+        #     # ax.set_ylim([1.1*np.min(y), 1.1*np.max(y)]) # fix the y axis
 
-        anim = animation.FuncAnimation(fig, animate, frames = len(prev_c[time_start:time_end]), interval = 5, blit = False)
-        anim.save(f'n={n}_cdf_plots_proposer_reversed_scatter.gif', writer='Pillow', fps=30)
-        plt.show()
+        # anim = animation.FuncAnimation(fig, animate, frames = len(prev_c[time_start:time_end]), interval = 5, blit = False)
+        # anim.save(f'n={n}_cdf_plots_proposer_reversed_scatter.gif', writer='Pillow', fps=30)
+        # plt.show()
 
 

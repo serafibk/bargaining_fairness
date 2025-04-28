@@ -17,9 +17,9 @@ def agent_update(prev_not_i_strategies, A, delta, M, responder= False):
 
         for r_r in prev_not_i_strategies: # go through record of responder strategies
             for i,a in enumerate(A): 
-                utility_feedback_vector[i] += (1-a) * r_r[f"A{a}"][0] # a_i accepted
+                utility_feedback_vector[i] += (1-a) * r_r[f"A{a:.2f}"][0] # a_i accepted
                 for j,b in enumerate(A):
-                    utility_feedback_vector[len(A)*(i+1)+j] += delta * b * r_r[f"R{a}{b}"][0] # accepts counter offer from responder       
+                    utility_feedback_vector[len(A)*(i+1)+j] += delta * b * r_r[f"R{a:.2f}{b:.2f}"][0] # accepts counter offer from responder       
         
         for i,a in enumerate(A):
             print(f"first round offer:{a}, total cumulative utility: {utility_feedback_vector[i] +sum([utility_feedback_vector[len(A)*(i+1)+j] for j in range(len(A))]) }")
@@ -43,9 +43,9 @@ def agent_update(prev_not_i_strategies, A, delta, M, responder= False):
 
         for r_p in prev_not_i_strategies: # go through record of proposer strategies
             for i,a in enumerate(A):
-                utility_feedback_vector[i] += a * r_p[f"{a}"][0] # Aa_i, acceptance of initial offer
+                utility_feedback_vector[i] += a * r_p[f"{a:.2f}"][0] # Aa_i, acceptance of initial offer
                 for j,b in enumerate(A):
-                    utility_feedback_vector[len(A)*(i+1)+j] += delta * (1-b) * r_p[f"{a}"][1][f"A{b}"][0] # Ra_ia_j, proposer accepts second offer
+                    utility_feedback_vector[len(A)*(i+1)+j] += delta * (1-b) * r_p[f"{a:.2f}"][1][f"A{b:.2f}"][0] # Ra_ia_j, proposer accepts second offer
                 
         # set up problem
         r_var = cp.Variable(len(A)+len(A)**2)
@@ -69,10 +69,10 @@ def agent_update(prev_not_i_strategies, A, delta, M, responder= False):
     # exit()
     
     if responder == False: # proposer
-        r_t_p_1 = {f"{a}" : [mass_values[i],dict({f"A{b}": [mass_values[(i+1)*len(A)+j]] for j,b in enumerate(A)}.items(), **{f"R{b}":[mass_values[(i+1)*len(A)+len(A)**2+j]] for j,b in enumerate(A)})] for i,a in enumerate(A)}
-        print("max first offer mass:",A[np.argmax([r_t_p_1[f"{a}"][0] for a in A])])
+        r_t_p_1 = {f"{a:.2f}" : [mass_values[i],dict({f"A{b:.2f}": [mass_values[(i+1)*len(A)+j]] for j,b in enumerate(A)}.items(), **{f"R{b}":[mass_values[(i+1)*len(A)+len(A)**2+j]] for j,b in enumerate(A)})] for i,a in enumerate(A)}
+        print("max first offer mass:",A[np.argmax([r_t_p_1[f"{a:.2f}"][0] for a in A])])
     else: # responder
-        r_t_p_1 = dict({f"A{a}":[mass_values[i]] for i,a in enumerate(A)}, **{f"R{a}{b}":[mass_values[len(A)*(i+1)+j]] for i,a in enumerate(A) for j,b in enumerate(A)})
+        r_t_p_1 = dict({f"A{a:.2f}":[mass_values[i]] for i,a in enumerate(A)}, **{f"R{a:.2f}{b:.2f}":[mass_values[len(A)*(i+1)+j]] for i,a in enumerate(A) for j,b in enumerate(A)})
 
     return r_t_p_1
 
@@ -154,12 +154,12 @@ def generate_initial_points(beta_p, beta_r, A, pure = False):
         values = []
         remaining_mass = mass
 
-        for i in range(n):
-            mass_value = remaining_mass / n #* np.random.random()
+        for i in range(n-1):
+            mass_value = remaining_mass * np.random.random()#/ n 
             values.append(mass_value)
-            # remaining_mass = remaining_mass - mass_value
+            remaining_mass = remaining_mass - mass_value
 
-        # values.append(remaining_mass) # ensure it adds up to mass
+        values.append(remaining_mass) # ensure it adds up to mass
         
         return values
     if pure == True: # randomly choose a pure strategy
@@ -214,43 +214,86 @@ def generate_initial_points(beta_p, beta_r, A, pure = False):
     
     return beta_p, beta_r
 
+def generate_new_betas(D):
+    beta_p = {}
+    for i in range(0,D + 1):
+        key = f"{i/D:.2f}"
+        inner_dict = {}
+        for j in range(0,D + 1):
+            inner_key_a = f"A{j/D:.2f}"
+            inner_key_r = f"R{j/D:.2f}"
+            inner_dict[inner_key_a] = [0, '-']
+            inner_dict[inner_key_r] = [0, '-']
+        beta_p[key] = [0, inner_dict]
+
+    beta_r = {}
+    for i in range(0,D + 1):
+        key_a = f"A{i/D:.2f}"
+        beta_r[key_a] = [0, '-']
+        for j in range(0,D + 1):
+            key_r = f"R{i/D:.2f}{j/D:.2f}"
+            beta_r[key_r] = [0, '-']
+    return (beta_p, beta_r)
+
 
 
 if __name__ == "__main__":
     intitial_strategies = []
     final_strategies = []
-    T = 1000 # time steps
+    T = 5000 # time steps
     delta = 0.9 # time discount factor
     M = 0.5 # learning rate
     D = 4 # discretization constant
 
-    A = [i/D for i in range(1,D+1)] # action list for offers {1/D, ... , 1}
+    A = [round(i/D,2) for i in range(D+1)] # action list for offers {0,1/D, ... , 1}
 
 
     for n in range(4,5): # try 20 random initializations
 
         # initial strategies as realization plans now -- note that '-' could be used later on for recursive setting for n rounds of bargaining 
-        beta_p_zeroed = {f"{a}" : [0,dict({f"A{b}": [0,"-"] for b in A}.items(), **{f"R{b}":[0,"-"] for b in A})] for a in A} # code is float(offer)A/Rfloat(responder offer)
-        beta_r_zeroed = dict({f"A{a}":[0,"-"] for a in A}, **{f"R{a}{b}":[0,"-"] for a in A for b in A}) # code is A/Rfloat(proposer offer)float(responder offer)
+        # beta_p_zeroed = {f"{a}" : [0,dict({f"A{b}": [0,"-"] for b in A}.items(), **{f"R{b}":[0,"-"] for b in A})] for a in A} # code is float(offer)A/Rfloat(responder offer)
+        # beta_r_zeroed = dict({f"A{a}":[0,"-"] for a in A}, **{f"R{a}{b}":[0,"-"] for a in A for b in A}) # code is A/Rfloat(proposer offer)float(responder offer)
 
         # generate possible initial realization plan from sequence-form polytope corresponding to action set A, Q(A)
-        beta_p, beta_r = generate_initial_points(beta_p_zeroed, beta_r_zeroed, A, pure=False)
+        # beta_p, beta_r = generate_initial_points(beta_p_zeroed, beta_r_zeroed, A, pure=False)
         # beta_p= {'0.2': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}], '0.4': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}], '0.6': [1, {'A0.2': [0, '-'], 'A0.4': [1, '-'], 'A0.6': [1, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [1, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [1, '-'], 'R1.0': [1, '-']}], '0.8': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}], '1.0': [0, {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.2': [0, '-'], 'R0.4': [0, '-'], 'R0.6': [0, '-'], 'R0.8': [0, '-'], 'R1.0': [0, '-']}]}
         # beta_r= {'A0.2': [0, '-'], 'A0.4': [0, '-'], 'A0.6': [0, '-'], 'A0.8': [0, '-'], 'A1.0': [0, '-'], 'R0.20.2': [0, '-'], 'R0.20.4': [0, '-'], 'R0.20.6': [0, '-'], 'R0.20.8': [1, '-'], 'R0.21.0': [0, '-'], 'R0.40.2': [0, '-'], 'R0.40.4': [1, '-'], 'R0.40.6': [0, '-'], 'R0.40.8': [0, '-'], 'R0.41.0': [0, '-'], 'R0.60.2': [0, '-'], 'R0.60.4': [0, '-'], 'R0.60.6': [1, '-'], 'R0.60.8': [0, '-'], 'R0.61.0': [0, '-'], 'R0.80.2': [0, '-'], 'R0.80.4': [0, '-'], 'R0.80.6': [1, '-'], 'R0.80.8': [0, '-'], 'R0.81.0': [0, '-'], 'R1.00.2': [0, '-'], 'R1.00.4': [0, '-'], 'R1.00.6': [0, '-'], 'R1.00.8': [1, '-'], 'R1.01.0': [0, '-']}
+
+        beta_p, beta_r = generate_new_betas(D)
+        y_index = 3 * (D+1) + 3
+        x_index = 3 * (D+1) + 3
+        
+        # generate pure strategy
+        # proposer 
+        first_offer_idx = 3 
+        second_response_idx = 3
+        beta_p[f"{A[first_offer_idx]:.2f}"][0] = 1
+        for b in A:
+            if b <= A[second_response_idx]:
+                beta_p[f"{A[first_offer_idx]:.2f}"][1][f"A{b:.2f}"][0] = 1
+            else:
+                beta_p[f"{A[first_offer_idx]:.2f}"][1][f"R{b:.2f}"][0] = 1
+        # responder
+        for a in A:
+            if a >= A[3]:
+                beta_r[f"A{a:.2f}"][0] = 1
+            else:
+                beta_r[f"R{a:.2f}{A[3]:.2f}"][0]=1
+
 
         prev_p = [beta_p]
         prev_r = [beta_r]
 
-        # initial check
-        for i,a in enumerate(A):
-                counter =0
-                for b in A[1:]:
-                    if beta_p[f"{a}"][1][f"A{A[0]}"][0] > ((1-b)/(1-A[0]))*beta_p[f"{a}"][1][f"A{b}"][0]:
-                        counter = counter + 1
-                if counter == len(A)-1:
-                    print(f"Condition met for first round offer {a} in initial conditions.")
+        # # initial check
+        # for i,a in enumerate(A):
+        #         counter =0
+        #         for b in A[1:]:
+        #             if beta_p[f"{a}"][1][f"A{A[0]}"][0] > ((1-b)/(1-A[0]))*beta_p[f"{a}"][1][f"A{b}"][0]:
+        #                 counter = counter + 1
+        #         if counter == len(A)-1:
+        #             print(f"Condition met for first round offer {a} in initial conditions.")
 
-        accumulation_condition = [0 for a in A]
+        # accumulation_condition = [0 for a in A]
 
         proposer_mass = []
         responder_mass = []
@@ -260,25 +303,25 @@ if __name__ == "__main__":
             r_p_t_p_1 = agent_update(prev_r,A=A,delta=delta, M=M)
             r_r_t_p_1 = agent_update(prev_p,A=A,delta=delta, M=M, responder=True)
             # checking for responder acumulation condition
-            for i,a in enumerate(A):
-                if accumulation_condition[i] == 1:
-                    continue 
-                counter =0
-                for b in A[1:]:
-                    if r_p_t_p_1[f"{a}"][1][f"A{A[0]}"][0] > ((1-b)/(1-A[0]))*r_p_t_p_1[f"{a}"][1][f"A{b}"][0]:
-                        # print(r_p_t_p_1[f"{a}"][1][f"A{A[0]}"][0])
-                        # print(r_p_t_p_1[f"{a}"][1][f"A{b}"][0])
-                        counter = counter + 1
-                if counter == len(A)-1:
-                    print(f"Condition met for first round offer {a} at time step {t}.")
-                    accumulation_condition[i] = 1
+            # for i,a in enumerate(A):
+            #     if accumulation_condition[i] == 1:
+            #         continue 
+            #     counter =0
+            #     for b in A[1:]:
+            #         if r_p_t_p_1[f"{a}"][1][f"A{A[0]}"][0] > ((1-b)/(1-A[0]))*r_p_t_p_1[f"{a}"][1][f"A{b}"][0]:
+            #             # print(r_p_t_p_1[f"{a}"][1][f"A{A[0]}"][0])
+            #             # print(r_p_t_p_1[f"{a}"][1][f"A{b}"][0])
+            #             counter = counter + 1
+            #     if counter == len(A)-1:
+            #         print(f"Condition met for first round offer {a} at time step {t}.")
+            #         accumulation_condition[i] = 1
 
-            if t < 50:
-                print(r_p_t_p_1)
-                print(r_r_t_p_1)
-                print()
-            else:
-                exit()
+            if t > 4950:
+                print(f"0.0 - 0.25: ",r_p_t_p_1["0.00"][0]-r_p_t_p_1["0.25"][0])
+                print(f"0.25 - 0.5: ", r_p_t_p_1["0.25"][0]-r_p_t_p_1["0.50"][0])
+                print(f"sum of gaps: ", np.abs(r_p_t_p_1["0.00"][0]-r_p_t_p_1["0.25"][0] )+np.abs(r_p_t_p_1["0.25"][0]-r_p_t_p_1["0.50"][0]))
+            # else:
+            #     exit()
             prev_p.append(r_p_t_p_1)
             prev_r.append(r_r_t_p_1)
 
