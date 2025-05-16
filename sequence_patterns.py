@@ -10,11 +10,11 @@ def generate_y_t_p_1(x_t,y_t,b,c):
 
 
 if __name__=="__main__":
-    x_1 = 0.6
-    y_1 = 0.7
-    c = 0.1
-    a = 0.2
-    b = 0.3
+    x_1 = 0.3333333333
+    y_1 = 0.9999999999
+    c = 0.01
+    a = 0.002
+    b = 0.03
 
     print(1/2 * (x_1-(c+1-y_1)/b))
     print(1/(2*np.sqrt(a*b))*(x_1+c/b -a*y_1 +a-2*x_1))
@@ -22,7 +22,7 @@ if __name__=="__main__":
     x_t_p_1 = generate_x_t_p_1(x_1,y_1,a)
     y_t_p_1 = generate_y_t_p_1(x_1,y_1,b,c)
 
-    for n in range(10):
+    for n in range(1000):
         print(f"x_t = {x_t_p_1}")
         print(f"y_t = {y_t_p_1}")
 

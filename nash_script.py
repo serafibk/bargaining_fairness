@@ -12,6 +12,7 @@ from openpyxl import load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 
 def run_n_rounds_extended_form(D, T, M, A, eps, n_rounds, initial=None, verbose=False):
     # Note: initial should be a tuple of lists specifying indices for initial strategies
@@ -85,7 +86,7 @@ def run_n_rounds_extended_form(D, T, M, A, eps, n_rounds, initial=None, verbose=
 
     df = pd.DataFrame(data_dict)
 
-    filepath = f'{n_rounds}_round_ne_convergence_files/D_{D}_M_{M}_T_{T}_del_{delta}_eps_{eps:.0e}_rounds_{n_rounds}.xlsx'
+    filepath = f'{n_rounds}_round_ne_convergence_files_grid/D_{D}_M_{M}_T_{T}_del_{delta}_eps_{eps:.0e}_rounds_{n_rounds}.xlsx'
     # fig.show()
 
     try:
@@ -174,50 +175,61 @@ def run_1_round_normal_grid(A, T=500, M=None, reference=None, eps=1e-7):
     for n_f in range(D+1):
         for n_w in range(D+1):
             print(f"candidate strategy {(A[n_w])}, firm strategy {(A[n_f])}")
-
-            beta_f = np.zeros_like(A)
-            beta_f[n_f] = 1
-            beta_w = np.zeros_like(A)
-            beta_w[n_w] = 1
-
-            prev_f = [beta_f]
-            prev_w = [beta_w]
-
-            timesteps = 0
-            for t in tqdm.tqdm(range(T)):
-                timesteps+=1
-                w_f_t_p_1 = agent_update_normal(prev_w, S_i=A, alpha_i=alpha_f, M=M)
-                w_w_t_p_1 = agent_update_normal(prev_f, S_i=A, alpha_i=alpha_w, M=M, responder=True)
-
-                prev_f.append(w_f_t_p_1)
-                prev_w.append(w_w_t_p_1)
-
-                if check_convergence(prev_f, prev_w, t):
-                    print(f"Converged after {t} iterations.")
-                    is_NE, _, _, _ = NE_check_normal(w_f_t_p_1,w_w_t_p_1, A)
-                    if is_NE:
-                        break
-
-            is_NE, optimal_strategy_utils, expected_strategy_utils, is_pure = NE_check_normal(w_f_t_p_1,w_w_t_p_1, A)
-
-            data_dict = {
-                'initial_conditions': (prev_f[0], prev_w[0]),
-                'initial_strats': (n_f, n_w),
-                'final_strats': (w_f_t_p_1, w_w_t_p_1), 
-                'optimal_strategy_utilities': optimal_strategy_utils,
-                'expected_strategy_utilities_non_negligible': expected_strategy_utils,
-                'NE': is_NE,
-                'Pure':is_pure,
-                'Timesteps':timesteps
-            }
-
-            df = pd.DataFrame(data_dict)
             try:
-                with pd.ExcelWriter(filepath, mode='a', engine='openpyxl', if_sheet_exists='new') as writer:
-                    df.to_excel(writer, sheet_name=f'f {tuple([n_f])}, w {tuple([n_w])}', index=False)
-            except FileNotFoundError:
-                with pd.ExcelWriter(filepath, mode='w', engine='openpyxl') as writer:
-                    df.to_excel(writer, sheet_name=f'f {tuple([n_f])}, w {tuple([n_w])}', index=False)
+                workbook = openpyxl.load_workbook(filepath)
+                sheet = workbook[f'f {tuple([n_f])}, w {tuple([n_w])}']
+                continue
+            except (KeyError,FileNotFoundError):
+
+                beta_f = np.zeros_like(A)
+                beta_f[n_f] = 1
+                beta_w = np.zeros_like(A)
+                beta_w[n_w] = 1
+
+                prev_f = [beta_f]
+                prev_w = [beta_w]
+
+                timesteps = 0
+                for t in tqdm.tqdm(range(T)):
+                    timesteps+=1
+                    w_f_t_p_1 = agent_update_normal(prev_w, S_i=A, alpha_i=alpha_f, M=M)
+                    w_w_t_p_1 = agent_update_normal(prev_f, S_i=A, alpha_i=alpha_w, M=M, responder=True)
+
+                    prev_f.append(w_f_t_p_1)
+                    prev_w.append(w_w_t_p_1)
+
+
+                    # if t >= 100:
+                    #     print(np.argmax(w_f_t_p_1))
+                    #     print(w_w_t_p_1[np.argmax(w_f_t_p_1)])
+
+                    if check_convergence(prev_f, prev_w, t):
+                        print(f"Converged after {t} iterations.")
+                        is_NE, _, _, _ = NE_check_normal(w_f_t_p_1, w_w_t_p_1, A)
+
+                        if is_NE:
+                            break
+
+                is_NE, optimal_strategy_utils, expected_strategy_utils, is_pure = NE_check_normal(w_f_t_p_1,w_w_t_p_1, A)
+
+                data_dict = {
+                    'initial_conditions': (prev_f[0], prev_w[0]),
+                    'initial_strats': (n_f, n_w),
+                    'final_strats': (w_f_t_p_1, w_w_t_p_1), 
+                    'optimal_strategy_utilities': optimal_strategy_utils,
+                    'expected_strategy_utilities_non_negligible': expected_strategy_utils,
+                    'NE': is_NE,
+                    'Pure':is_pure,
+                    'Timesteps':timesteps
+                }
+
+                df = pd.DataFrame(data_dict)
+                try:
+                    with pd.ExcelWriter(filepath, mode='a', engine='openpyxl', if_sheet_exists='new') as writer:
+                        df.to_excel(writer, sheet_name=f'f {tuple([n_f])}, w {tuple([n_w])}', index=False)
+                except FileNotFoundError:
+                    with pd.ExcelWriter(filepath, mode='w', engine='openpyxl') as writer:
+                        df.to_excel(writer, sheet_name=f'f {tuple([n_f])}, w {tuple([n_w])}', index=False)
     generate_imshow_from_sheet(A, pure=True, n_rounds=n_rounds, filepath=filepath, normal=True)
 
 def run_1_round_normal_bar(A, T=500, uniform_firm=True, M=None, reference=None, eps=1e-7):
@@ -397,7 +409,7 @@ def NE_check_normal(w_f,w_w, S, eps=1e-7):
             utilities.append(sum([w_w[j] for j in range(i+1)])*(1-S[i]))
     
     # print(utilities)
-    return (np.argmax(utilities) == np.argmax(w_f), (np.max(utilities), None), (1-A[np.argmax(w_f)], None), 1-np.argmax(w_f) < eps)
+    return (utilities[np.argmax(utilities)] <= utilities[np.argmax(w_f)] and 1-np.argmax(w_f) < eps, (np.max(utilities), None), (1-A[np.argmax(w_f)], None), 1-np.argmax(w_f) < eps)
 
 
 def generate_constraints_recursive(n_rounds, r_var, A, sequence="", is_firm=True):
@@ -499,7 +511,13 @@ def agent_update_memoized(n_rounds, prev_not_i_strategies, A, tlen, M, u_coeffic
     else:
         sum_strategies = prev_not_i_strategies.sum(axis=0)
         utility_feedback_vector = u_coefficients * sum_strategies[:len(u_coefficients)]
-        # print(worker, utility_feedback_vector)
+        # if len(prev_not_i_strategies) >= 1000:
+        #     print(sum_strategies[get_index(f'R{0.0:.2f}{0.0:.2f}',A)])
+        #     print(worker, f"utility for 0.0 counter offer: {utility_feedback_vector[get_index(f'R{0.0:.2f}{0.0:.2f}',A)]}")
+        #     print(sum_strategies[get_index(f'R{0.0:.2f}{0.2:.2f}',A)])
+        #     print(worker, f"utility for 0.2 counter offer: {utility_feedback_vector[get_index(f'R{0.0:.2f}{0.2:.2f}',A)]}")
+        #     print(sum_strategies[get_index(f'R{0.0:.2f}{0.4:.2f}',A)])
+        #     print(worker, f"utility for 0.4 counter offer: {utility_feedback_vector[get_index(f'R{0.0:.2f}{0.4:.2f}',A)]}")
 
     # utility_feedback_vector = np.zeros(len(terminals))
     # for strategy in prev_not_i_strategies:
@@ -760,12 +778,15 @@ def generate_init_strategies(A, n_rounds, custom=False, n_f_cust=None, n_w_cust=
                     beta_w[get_index(f"R{a:.2f}{A[n_w[1]]:.2f}R{c:.2f}", A)] = 1
     return (beta_f, beta_w, n_f, n_w)
 
-def check_convergence(prev_f, prev_w, t, window_size=5, convergence_threshold=1e-7):
+def check_convergence(prev_f, prev_w, t, window_size=2, convergence_threshold=1e-7):
     if t >= window_size:
-        f_converged = all(np.linalg.norm(np.array(prev_f[-1]) - np.array(prev_f[-i])) < convergence_threshold for i in range(2, window_size + 2))
-        w_converged = all(np.linalg.norm(np.array(prev_w[-1]) - np.array(prev_w[-i])) < convergence_threshold for i in range(2, window_size + 2))
-        # if t>=3700:
-        #     print(np.linalg.norm(np.array(prev_w[-1]) - np.array(prev_w[-2])))
+        # f_converged = all(np.linalg.norm(np.array(prev_f[-1]) - np.array(prev_f[-i])) < convergence_threshold for i in range(2, window_size + 2))
+        # w_converged = all(np.linalg.norm(np.array(prev_w[-1]) - np.array(prev_w[-i])) < convergence_threshold for i in range(2, window_size + 2))
+        f_converged = all(np.linalg.norm(np.array(prev_f[-1]) - np.array(prev_f[-i]), ord=np.inf) < convergence_threshold for i in range(2, window_size + 2))
+        w_converged = all(np.linalg.norm(np.array(prev_w[-1]) - np.array(prev_w[-i]), ord=np.inf) < convergence_threshold for i in range(2, window_size + 2))
+        # if t>=14000:
+        #     print(f"worker strategy change: {np.linalg.norm(np.array(prev_w[-1]) - np.array(prev_w[-2]),ord=np.inf)}")
+        #     print(f"firm strategy change: {np.linalg.norm(np.array(prev_f[-1]) - np.array(prev_f[-2]),ord=np.inf)}")
         return f_converged and w_converged
     return False
 
@@ -930,6 +951,7 @@ def produce_relative_probs(r, terminals, is_firm, n_rounds):
         if n_rounds == 1:
             return r
         for i in range(len(A)):
+            print(i)
             rel[i] = r[i]
     else:
         if n_rounds == 3:
@@ -957,10 +979,10 @@ def produce_relative_probs(r, terminals, is_firm, n_rounds):
             # if 1-(r[seq_idx]/parent_prob)>eps:
             #     print(seq, r[seq_idx]/parent_prob)
             if parent_prob > 0:
-                if parent_prob < 1e-7:
+                if parent_prob < 1e-9:
                     rel[seq_idx] = 0
                 else:
-                    rel[seq_idx] = r[seq_idx]# min(r[seq_idx]/parent_prob,1)
+                    rel[seq_idx] =  min(r[seq_idx]/parent_prob,1)#r[seq_idx]
             else:
                 rel[seq_idx] = 0
     # print(rel)
@@ -1078,9 +1100,9 @@ def generate_1_round_graph(r_f_rel, r_w_rel, A):
 
     graph.add_vertices(vertices)
     for a in A:
-        graph.add_edge(f"ROOT", f"{a:.2f}", **{'probability': f"{r_f_rel[get_index(f"{a:.2f}", A)]:.5f}"})
-        graph.add_edge(f"{a:.2f}", f"A{a:.2f}", **{'probability': f"{r_w_rel[get_index(f"A{a:.2f}", A)]:.5f}", 'payoff (firm, worker)':(1-a, a)})
-        graph.add_edge(f"{a:.2f}", f"R{a:.2f}", **{'probability': f"{r_w_rel[get_index(f"R{a:.2f}", A)]:.5f}", 'payoff (firm, worker)':(0, 0)})
+        graph.add_edge(f"ROOT", f"{a:.2f}", **{'probability': f"{r_f_rel[get_index(f'{a:.2f}', A)]:.5f}"})
+        graph.add_edge(f"{a:.2f}", f"A{a:.2f}", **{'probability': f"{r_w_rel[get_index(f'A{a:.2f}', A)]:.5f}", 'payoff (firm, worker)':(1-a, a)})
+        graph.add_edge(f"{a:.2f}", f"R{a:.2f}", **{'probability': f"{r_w_rel[get_index(f'R{a:.2f}', A)]:.5f}", 'payoff (firm, worker)':(0, 0)})
     return graph, vertices
 
 def generate_2_round_graph(r_f_rel, r_w_rel, A):
@@ -1096,12 +1118,12 @@ def generate_2_round_graph(r_f_rel, r_w_rel, A):
 
     graph.add_vertices(vertices)
     for a in A:
-        graph.add_edge(f"ROOT", f"{a:.2f}", **{'probability': f"{r_f_rel[get_index(f"{a:.2f}", A)]:.5f}"})
-        graph.add_edge(f"{a:.2f}", f"A{a:.2f}", **{'probability': f"{r_w_rel[get_index(f"A{a:.2f}", A)]:.5f}", 'payoff (firm, worker)':(1-a, a)})
+        graph.add_edge(f"ROOT", f"{a:.2f}", **{'probability': f"{r_f_rel[get_index(f'{a:.2f}', A)]:.4e}"})
+        graph.add_edge(f"{a:.2f}", f"A{a:.2f}", **{'probability': f"{r_w_rel[get_index(f'A{a:.2f}', A)]:.4e}", 'payoff (firm, worker)':(1-a, a)})
         for b in A:
-            graph.add_edge(f"{a:.2f}", f"R{a:.2f}_{b:.2f}", **{'probability': f"{r_w_rel[get_index(f"R{a:.2f}{b:.2f}", A)]:.4e}"})
-            graph.add_edge(f"R{a:.2f}_{b:.2f}", f"{a:.2f}A{b:.2f}", **{'probability': f"{r_f_rel[get_index(f"{a:.2f}A{b:.2f}", A)]:.4e}", 'payoff (firm, worker)':(b*delta, (1-b)*delta)})
-            graph.add_edge(f"R{a:.2f}_{b:.2f}", f"{a:.2f}R{b:.2f}", **{'probability': f"{r_f_rel[get_index(f"{a:.2f}R{b:.2f}", A)]:.4e}", 'payoff (firm, worker)':(0, 0)})
+            graph.add_edge(f"{a:.2f}", f"R{a:.2f}_{b:.2f}", **{'probability': f"{r_w_rel[get_index(f'R{a:.2f}{b:.2f}', A)]:.4e}"})
+            graph.add_edge(f"R{a:.2f}_{b:.2f}", f"{a:.2f}A{b:.2f}", **{'probability': f"{r_f_rel[get_index(f'{a:.2f}A{b:.2f}', A)]:.4e}", 'payoff (firm, worker)':(b*delta, (1-b)*delta)})
+            graph.add_edge(f"R{a:.2f}_{b:.2f}", f"{a:.2f}R{b:.2f}", **{'probability': f"{r_f_rel[get_index(f'{a:.2f}R{b:.2f}', A)]:.4e}", 'payoff (firm, worker)':(0, 0)})
     return graph, vertices
 
 def generate_3_round_graph(r_f_rel, r_w_rel, A):
@@ -1120,15 +1142,15 @@ def generate_3_round_graph(r_f_rel, r_w_rel, A):
 
     graph.add_vertices(vertices)
     for a in A:
-        graph.add_edge(f"ROOT", f"{a:.2f}", **{'probability': f"{r_f_rel[get_index(f"{a:.2f}", A)]:.5f}"})
-        graph.add_edge(f"{a:.2f}", f"A{a:.2f}", **{'probability': f"{r_w_rel[get_index(f"A{a:.2f}", A)]:.5f}", 'payoff (firm, worker)':(1-a, a)})
+        graph.add_edge(f"ROOT", f"{a:.2f}", **{'probability': f"{r_f_rel[get_index(f'{a:.2f}', A)]:.4e}"})
+        graph.add_edge(f"{a:.2f}", f"A{a:.2f}", **{'probability': f"{r_w_rel[get_index(f'A{a:.2f}', A)]:.4e}", 'payoff (firm, worker)':(1-a, a)})
         for b in A:
-            graph.add_edge(f"{a:.2f}", f"R{a:.2f}_{b:.2f}", **{'probability': f"{r_w_rel[get_index(f"R{a:.2f}{b:.2f}", A)]:.4e}"})
-            graph.add_edge(f"R{a:.2f}_{b:.2f}", f"{a:.2f}A{b:.2f}", **{'probability': f"{r_f_rel[get_index(f"{a:.2f}A{b:.2f}", A)]:.4e}", 'payoff (firm, worker)':(b*delta, (1-b)*delta)})
+            graph.add_edge(f"{a:.2f}", f"R{a:.2f}_{b:.2f}", **{'probability': f"{r_w_rel[get_index(f'R{a:.2f}{b:.2f}', A)]:.4e}"})
+            graph.add_edge(f"R{a:.2f}_{b:.2f}", f"{a:.2f}A{b:.2f}", **{'probability': f"{r_f_rel[get_index(f'{a:.2f}A{b:.2f}', A)]:.4e}", 'payoff (firm, worker)':(b*delta, (1-b)*delta)})
             for c in A:
-                graph.add_edge(f"R{a:.2f}_{b:.2f}", f"{a:.2f}R{b:.2f}_{c:.2f}", **{'probability': f"{r_f_rel[get_index(f"{a:.2f}R{b:.2f}{c:.2f}", A)]:.4e}"})
-                graph.add_edge(f"{a:.2f}R{b:.2f}_{c:.2f}", f"R{a:.2f}_{b:.2f}A{c:.2f}", **{'probability': f"{r_w_rel[get_index(f"R{a:.2f}{b:.2f}A{c:.2f}", A)]:.4e}", 'payoff (firm, worker)':((1-c)*delta**2, c*delta**2)})
-                graph.add_edge(f"{a:.2f}R{b:.2f}_{c:.2f}", f"R{a:.2f}_{b:.2f}R{c:.2f}", **{'probability': f"{r_w_rel[get_index(f"R{a:.2f}{b:.2f}R{c:.2f}", A)]:.4e}", 'payoff (firm, worker)':(0,0)})
+                graph.add_edge(f"R{a:.2f}_{b:.2f}", f"{a:.2f}R{b:.2f}_{c:.2f}", **{'probability': f"{r_f_rel[get_index(f'{a:.2f}R{b:.2f}{c:.2f}', A)]:.4e}"})
+                graph.add_edge(f"{a:.2f}R{b:.2f}_{c:.2f}", f"R{a:.2f}_{b:.2f}A{c:.2f}", **{'probability': f"{r_w_rel[get_index(f'R{a:.2f}{b:.2f}A{c:.2f}', A)]:.4e}", 'payoff (firm, worker)':((1-c)*delta**2, c*delta**2)})
+                graph.add_edge(f"{a:.2f}R{b:.2f}_{c:.2f}", f"R{a:.2f}_{b:.2f}R{c:.2f}", **{'probability': f"{r_w_rel[get_index(f'R{a:.2f}{b:.2f}R{c:.2f}', A)]:.4e}", 'payoff (firm, worker)':(0,0)})
     return graph, vertices
 
 def draw_tree(n_rounds, index, A, r_f_rel, r_w_rel, incredible_threats, credible_threats, show_all_probs=True, postfix='show'):
@@ -1287,8 +1309,8 @@ def NE_check(r_f, r_w, A, delta, n_rounds, terminals_firm, terminals_work, eps=1
     opt_w.sort(key=lambda s: len(s))
     opt_f.sort(key=lambda s: len(s))
 
-    # print(opt_w)
-    # print(opt_f)
+    print(opt_w)
+    print(opt_f)
     
     first_round_best_idx = np.argmax(first_round_utils)
     first_round_offer_seq = f"{A[first_round_best_idx]:.2f}"
@@ -1503,11 +1525,12 @@ def run_2_round_grid_search(D, T, M, A, delta, eps, verbose=False):
                     file_path = index+'/'+inits
                     postfix='grid'
                     
-                    workbook = openpyxl.load_workbook(f'{n_rounds}_round_ne_convergence_files_grid/D_{D}_M_{M}_T_{T}_del_{delta}_eps_{eps:.0e}_rounds_{n_rounds}.xlsx')
+                    
                     try:
+                        workbook = openpyxl.load_workbook(f'{n_rounds}_round_ne_convergence_files_grid/D_{D}_M_{M}_T_{T}_del_{delta}_eps_{eps:.0e}_rounds_{n_rounds}.xlsx')
                         sheet = workbook[f'f {tuple(n_f)}, w {tuple(n_w)}']
                         continue
-                    except KeyError:
+                    except (KeyError,FileNotFoundError):
                         # if os.path.exists(f'{n_rounds}_round_plots_{postfix}/{file_path}.html'):
                         #     continue
                         prev_f = np.array([beta_f])
@@ -1521,8 +1544,22 @@ def run_2_round_grid_search(D, T, M, A, delta, eps, verbose=False):
 
                             prev_f = np.vstack([prev_f, r_f_t_p_1])
                             prev_w = np.vstack([prev_w, r_w_t_p_1])
+                            # if t >=1000:
+                            #     print("firm's first round strategy and worker's response")
+                            #     for a in A:
+                            #         print(f"offer: {a}, probability: {r_f_t_p_1[get_index(f'{a:.2f}', A)]}")
+                            #         if a == 0.0:
+                            #             print(f"worker acceptance: {r_w_t_p_1[get_index(f'A{a:.2f}', A)]}")
+                            #             for b in A:
+                            #                 print(f"worker rejection and counter offer: {r_w_t_p_1[get_index(f'R{a:.2f}{b:.2f}', A)]}")
+                            #                 print(f"firm accepts counter offer: {r_f_t_p_1[get_index(f'{a:.2f}A{b:.2f}', A)]}")
+                            #                 print(f"firm rejects counter offer: {r_f_t_p_1[get_index(f'{a:.2f}R{b:.2f}', A)]}")
+                            #             print(f"worker probability mass sum: {sum([r_w_t_p_1[get_index(f'A{a:.2f}', A)]]+[r_w_t_p_1[get_index(f'R{a:.2f}{b:.2f}', A)] for b in A])}")
+                                    # else:
+                                    #     print(f"worker rejection and counter offer: {r_w_t_p_1[get_index(f'R{a:.2f}{0.2:.2f}', A)]}")
+                                    #     print(f"worker probability mass sum: {sum([r_w_t_p_1[get_index(f'A{a:.2f}', A)]]+[r_w_t_p_1[get_index(f'R{a:.2f}{b:.2f}', A)] for b in A])}")
 
-                            if check_convergence(prev_f, prev_w, t, convergence_threshold=1e-7):
+                            if check_convergence(prev_f, prev_w, t, convergence_threshold=eps):
                                 print("Converged after", t, "steps")
                                 is_NE, _, _, _, _ = NE_check(r_f_t_p_1,r_w_t_p_1, A, delta, n_rounds, terminals_firm, terminals_work)
                                 if is_NE:
@@ -1811,7 +1848,12 @@ def gather_3_round_data_from_sheet(filepath):
 
 
 def generate_imshow_from_sheet(A, pure, n_rounds, filepath, normal=False, ne_threshold=None):
-    excel_file = pd.ExcelFile(filepath)
+    try:
+        excel_file = pd.ExcelFile(filepath)
+    except:
+        print(filepath, ' Not Found')
+        return 
+    
     fpath, fname = filepath.split('/') 
 
     pattern = r"D_(\d+)_M_([0-9.]+)_T_([0-9]+)_del_([0-9.]+)_eps_([0-9eE.-]+)"
@@ -1833,6 +1875,10 @@ def generate_imshow_from_sheet(A, pure, n_rounds, filepath, normal=False, ne_thr
     # print(sheet_names)
     if n_rounds == 2:
         util_matrix = np.zeros(((D+1)**2, (D+1)**2))
+        c_x_idx = []
+        c_y_idx = []
+        i_x_idx = []
+        i_y_idx = []
     else:
         util_matrix = np.zeros(((D+1), (D+1)))
     dist_f_str = ''
@@ -1877,6 +1923,17 @@ def generate_imshow_from_sheet(A, pure, n_rounds, filepath, normal=False, ne_thr
         if n_rounds == 2:
             y_index = n_f[0] * (len(A)) + n_f[1]
             x_index = n_w[0] * (len(A)) + n_w[1]
+
+            incredible_threats, _ = df['incredible threats']
+            credible_threats, _ = df['credible threats']#[float(c) for c in df['credible threats'] ]# offer values where this occurs
+            credible_threats = ast.literal_eval(credible_threats)
+            incredible_threats = ast.literal_eval(incredible_threats)
+            credible_threats_floats = [float(c) for c in credible_threats]
+            incredible_threats_floats_1 = [float(i[1:4]) for i in incredible_threats]
+            incredible_threats_floats_2 = [float(i[6:9]) for i in incredible_threats]
+
+
+
         else:
             y_index = n_f
             x_index = n_w
@@ -1890,6 +1947,12 @@ def generate_imshow_from_sheet(A, pure, n_rounds, filepath, normal=False, ne_thr
                 util_matrix[y_index, x_index] = 1-round(actual_util[0], 4)
             else:
                 util_matrix[y_index, x_index] = round(actual_util[1], 4)
+                if len(credible_threats_floats) >0 and credible_threats_floats[0] < round(actual_util[1], 4):
+                    c_x_idx.append(x_index)
+                    c_y_idx.append(y_index)
+                if len(incredible_threats_floats_1)> 0 and 0.6 in incredible_threats_floats_1 and 0.20 in incredible_threats_floats_2:
+                    i_x_idx.append(x_index)
+                    i_y_idx.append(y_index)
         else:
             util_matrix[y_index, x_index] = 1
 
@@ -1899,10 +1962,15 @@ def generate_imshow_from_sheet(A, pure, n_rounds, filepath, normal=False, ne_thr
         # postfix=f'mixed_f({dist_f})_w({dist_w})'
         match = re.search(pattern, fname)
         alpha = None
+        a_f=-1
+        a_w=-1
         if match:
             alpha_str = match.groups()[0]
             # print(alpha_str)
             alpha = tuple(map(int, alpha_str.split(',')))
+            a_f=alpha[0]
+            a_w=alpha[1]
+
         title = f"Worker Util Value at NE \n(η={M:.2f}, D={D}, T={T}, ɛ={eps:.0e}, reference={alpha}"
     else:
         title = f"Worker Util Value at NE \n(η={M:.2f}, D={D}, T={T}, δ={delta:.2f}, ɛ={eps:.0e}"
@@ -1910,17 +1978,19 @@ def generate_imshow_from_sheet(A, pure, n_rounds, filepath, normal=False, ne_thr
         title+=f', f_mix={dist_f_str}, w_mix={dist_f_str})'
     else:
         title+=')'
-    fig.suptitle(title)
+    # fig.suptitle(title)
 
     colors = [
-        (0.0, '#9cd3f2'), # light blue
-        (0.5, '#3ea1b1'), # teal
-        (1.0, '#1f4e79')  # deep blue
+        (0.0, '#000000'),
+        (0.25, '#2b737e'),
+        (0.5, '#5ea04b'),
+        (0.75, '#ff8103'),
+        (1.0, '#ffffff'),  
     ]
     # colors = [
     #     (0.0, '#3D9970'), 
-    #     (0.5, '#1f4e79'),
-    #     (1.0, '#FF851B'), 
+    #     (0.5, '#DAA520'),
+    #     (1.0, '#CD853F'), 
     # ]
 
     # Other color schemes: 
@@ -1931,13 +2001,31 @@ def generate_imshow_from_sheet(A, pure, n_rounds, filepath, normal=False, ne_thr
     # Winter: #BBDEFB, #B0BEC5, #B2DFDB
 
     # Create the custom colormap
-    # custom_cmap = LinearSegmentedColormap.from_list('custom_cmap', colors)
+    custom_cmap = LinearSegmentedColormap.from_list('custom_cmap', colors)
 
-    im = ax.imshow(util_matrix, cmap='viridis', vmin=0, vmax=1, origin='lower')
-    # im = ax.imshow(util_matrix, cmap=custom_cmap, origin='lower')
+    # im = ax.imshow(util_matrix, cmap='gist_heat', vmin=0, vmax=1, origin='lower')
+    im = ax.imshow(util_matrix, cmap=custom_cmap,vmin=0, vmax=1, origin='lower')
+    ax.scatter(i_x_idx, i_y_idx,c="black",s=100,marker="o") # incredible threat markers
+    ax.add_patch(Rectangle((-0.5, -0.5), (D+1)**2, (D)**2-1, fill=False, hatch='\\'))
+    ax.add_patch(Rectangle((-0.5, 29.5), (D+1)**2, 6, fill=False, hatch='\\'))
+    # ax.scatter(c_x_idx, c_y_idx,c="white",s=20,marker="^") # credible threat markers
+    
 
     # Add colorbar
-    plt.colorbar(im, ax=ax, label='Expected Utility for Worker')
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.ax.tick_params(labelsize=20)
+    cbar.set_label(label='Expected Utility for Worker',fontsize=25)
+
+    # add meta-game equilibrium point 
+    # firm_strat, worker_strat = compute_meta_game_equilibrium(filepath, normal=True)
+    # # print(firm_strat)
+    # # print(worker_strat)
+    # firm_idxs = [i for i,f in enumerate(firm_strat) if f > 0 ]
+    # worker_idxs = [i for i,w in enumerate(worker_strat) if w > 0 ]
+    # for f in firm_idxs:
+    #     for w in worker_idxs:
+    #         ax.scatter([w], [f],c="gold",s=1500,marker="*")
+    # ax.scatter([0],[0],c="blue")
 
     # Customize x-axis labels
     if n_rounds == 2:
@@ -1947,16 +2035,25 @@ def generate_imshow_from_sheet(A, pure, n_rounds, filepath, normal=False, ne_thr
         x_labels = [f"{A[n_w1]:.2f}" for n_w1 in range(D+1)]
         y_labels = [f"{A[n_f1]:.2f}" for n_f1 in range(D+1)]
     ax.set_xticks(range(len(x_labels)))
-    ax.set_xticklabels(x_labels, rotation=90, ha='center')
-    ax.set_yticks(range(len(y_labels)))
-    ax.set_yticklabels(y_labels)
+    ax.set_xticklabels(x_labels, rotation=90, ha='center', fontsize=20)
+    # if a_f == -1:
+        # ax.set_yticks(range(len(y_labels)))
+        # ax.set_yticklabels(y_labels, fontsize=20)
+
+    # hiding nth tick label
+    n = 2  
+    [l.set_visible(False) for (i,l) in enumerate(ax.xaxis.get_ticklabels()) if i % n != 0]
+    [l.set_visible(False) for (i,l) in enumerate(ax.yaxis.get_ticklabels()) if i % n != 0]
+    # if a_f == 15:
+    [l.set_visible(False) for (i,l) in enumerate(ax.yaxis.get_ticklabels()) if i % n == 0]
     
     if n_rounds == 1:
-        ax.set_xlabel('Worker Initial Strategy (Acceptance Threshold)')
-        ax.set_ylabel('Firm Initial Strategy (Offer)')
+        ax.set_xlabel('Worker Initial Strategy (Acceptance Threshold)',fontsize=25)
+        if a_f != 15:
+            ax.set_ylabel('Firm Initial Strategy (Offer)',fontsize=25)
     elif pure:
-        ax.set_xlabel("Worker Initial Strategy (Acceptance Threshold, Counter Offer)")
-        ax.set_ylabel("Firm Initial Strategy (Offer, Acceptance Threshold)")
+        ax.set_xlabel("Worker Initial Strategy (Acceptance Threshold, Counter Offer)",fontsize=20)
+        # ax.set_ylabel("Firm Initial Strategy (Offer, Acceptance Threshold)",fontsize=20)
     else:
         ax.set_xlabel("Worker Strategy (Low Offer, High Offer)")
         ax.set_ylabel("Firm Initial Strategy (Offer A, Offer B)")
@@ -2009,6 +2106,9 @@ def generate_tree_from_sheet(A, n_rounds, filepath, postfix='grid'):
         else:
             n_f = tuple(map(int, n_f_str.split(',')))
             n_w = tuple(map(int, n_w_str.split(',')))
+            # print(n_f)
+            # if n_f[0] <4:
+            #     continue
 
         if n_rounds == 2:
                 y_index = n_f[0] * (len(A)) + n_f[1]
@@ -2027,17 +2127,23 @@ def generate_tree_from_sheet(A, n_rounds, filepath, postfix='grid'):
         # print(credible_threats)
         incredible_threats, _ = df['incredible threats']
         # print(incredible_threats)
-        r_f_rel, r_w_rel = df['relative_final_strats']
+        r_f, r_w = df['final_strats']
+        r_f_final= list(map(float, r_f[1:-1].replace('np.float64(','').replace(')','').strip().split(',')))
+        r_w_final= list(map(float, r_w[1:-1].replace('np.float64(','').replace(')','').strip().split(',')))
+        terminals_firm, terminals_work, _, terminals_dict_w = generate_terminal_seqs(A, n_rounds)
+        terminal_seqs = terminals_work
+        r_w_rel = produce_relative_probs(r_w_final, terminals_work, False, n_rounds)
+        r_f_rel = produce_relative_probs(r_f_final, terminals_firm, True, n_rounds)
         credible_threats = ast.literal_eval(credible_threats)
         incredible_threats = ast.literal_eval(incredible_threats)
-        r_f_rel = list(map(float, r_f_rel[1:-1].strip().split()))
-        r_w_rel = list(map(float, r_w_rel[1:-1].replace('np.float64(','').replace(')','').strip().split(',')))
+        # r_f_rel = list(map(float, r_f_rel[1:-1].strip().split()))
+        # r_w_rel = list(map(float, r_w_rel[1:-1].replace('np.float64(','').replace(')','').strip().split(',')))
         # print(credible_threats)
         # print(incredible_threats)
         # print(r_f_rel)
         # print(r_w_rel)
         
-        draw_tree(n_rounds, file_path, A, r_f_rel,r_w_rel, incredible_threats, credible_threats, postfix=postfix)#, show_all_probs=False)
+        draw_tree(n_rounds, file_path, A, r_f_rel,r_w_rel, incredible_threats, credible_threats, postfix=postfix) #show_all_probs=False)
         
 def compute_meta_game_equilibrium(filepath, normal=False):
     excel_file = pd.ExcelFile(filepath)
@@ -2102,6 +2208,8 @@ def compute_meta_game_equilibrium(filepath, normal=False):
 
         # minimax solution
         f, w = meta_game.linear_program()# returns row strategy, col. strategy
+        print(f"Value of game: {np.transpose(f)@A@w}")
+        return f,w
 
         print("Minimax solution")
         print(f"firm equilibrium strategy: {f}")
@@ -2139,18 +2247,135 @@ def get_updated_ne_threshold(filepath):
     generate_imshow_from_sheet(A, pure=True, n_rounds=n_rounds, filepath=filepath, normal=False, ne_threshold=cur_threshold)
     return cur_threshold
 
+
+def generate_outcome_statistics(filepath):
+    try:
+        excel_file = pd.ExcelFile(filepath)
+    except:
+        # print(filepath, ' Not Found')
+        return -1,-1,-1,-1,-1,-1
+    
+    fpath, fname = filepath.split('/') 
+    pattern = r"ref\((.*?)\)"
+    match = re.search(pattern, fname)
+    alpha = None
+    alpha_f=-1
+    alpha_w = -1
+    if match:
+        alpha_str = match.groups()[0]
+        alpha = tuple(map(int, alpha_str.split(',')))
+        alpha_f = alpha[0]
+        alpha_w=alpha[1]
+
+    pattern = r"D_(\d+)_M_([0-9.]+)_T_([0-9]+)_del_([0-9.]+)_eps_([0-9eE.-]+)"
+    match = re.match(pattern, fname)
+
+    D, M, T, delta, eps = match.groups()
+    
+    D = int(D)
+    M = float(M)
+    T = int(T)
+    delta = float(delta)
+    eps = float(eps)
+
+    if alpha is not None:
+        worker_ref= round(alpha[1]/D,4)
+
+    sheet_names = excel_file.sheet_names
+    
+    # util_matrix = np.zeros(((D+1), (D+1)))
+
+    above_ref_count = 0
+    above_initial_count = 0
+    max_worker_utility = 0
+    min_worker_utility = 2
+
+    # Loop through each sheet and read the data
+    for sheet_name in sheet_names:
+        # Pattern to match tuples for f and w
+        pattern = r"f\s\((.*?)\),\s*w\s\((.*?)\)"
+        
+        match = re.match(pattern, sheet_name)
+
+        n_f_str, n_w_str = match.groups()
+        n_f = int(n_f_str[:-1])
+        n_w = int(n_w_str[:-1])
+
+        worker_initial = round(n_w/D,4)
+
+        df = excel_file.parse(sheet_name)
+
+        actual_util = df['expected_strategy_utilities_non_negligible'] 
+        worker_utility =  1-round(actual_util[0], 4)
+
+        if worker_utility < min_worker_utility:
+            min_worker_utility = worker_utility
+        if worker_utility > max_worker_utility:
+            max_worker_utility = worker_utility
+
+        if worker_utility >= worker_initial:
+            above_initial_count += 1
+        if alpha is not None and worker_utility >= worker_ref:
+            above_ref_count +=1
+    
+    return min_worker_utility, max_worker_utility, above_initial_count / (D+1)**2, above_ref_count / (D+1)**2,alpha_f,alpha_w
+
+
+
+        
+
+
+
+
+
+
+
 if __name__ == "__main__":
     # D = 3
-    D = 5 # 2 rounds
-    T = 2000 # 2 rounds
-    M = 0.5
-    delta = 0.55
+    D = [20, 25, 30]
+    T = [500,2000,5000] 
+    # T = 15000 # 2 rounds
+    M = [0.1,0.25,0.28854,0.5,0.6,0.8]
+    delta = 0.9   
     eps = 1e-7
-    n_rounds = 3
+    n_rounds = 1
     n_trials = 100
-    A = [round(i/D,4) for i in range(0,D+1)] # action list for offers {1/D, ... , 1}
+    # ref_value = (5,15)
+    # A = [round(i/D,4) for i in range(0,D+1)] # action list for offers {1/D, ... , 1}
+    # filepath = f'2_round_ne_convergence_files_grid/D_5_M_{M}_T_15000_del_{delta}_eps_1e-06_rounds_2.xlsx'
+    refs = ["","_ref(15, 29)", "_ref(5, 15)","_ref(30, 30)","_ref(20, 16)"]
+    for d in D:
+        A = [round(i/d,4) for i in range(0,d+1)] # action list for offers {1/D, ... , 1}
+        for t in T:
+            for m in M:
+                for ref in refs:
+                    filepath= f"1_round_ne_convergence_files_normal_grid/D_{D}_M_{M}_T_{T}_del_0.5_eps_1e-07_rounds_1{ref}.xlsx"
+                    generate_imshow_from_sheet(A, True, n_rounds, filepath, normal=True)
+    #                 min_w, max_w, abv_init, abv_ref,a_f,a_w = generate_outcome_statistics(filepath)
+
+    #                 if min_w > -1:
+    #                     # print(f"Filepath: {filepath}")
+    #                     # print(f"min worker utility: {min_w}")
+    #                     # print(f"max worker utility: {max_w}")
+    #                     # print(f"Above init worker percentage: {abv_init}")
+    #                     # print(f"Above ref worker percentage: {abv_ref}")
+    #                     print(f"{d} & ${round(m,2)}$ & ($\\frac{{{a_f}}}{{{d}}}$, $\\frac{{{a_w}}}{{{d}}}$) & ${round(abv_init,4)}$ & ${round(abv_ref,4)}$ & ${round(min_w,4)}$ & ${round(max_w,4)}$\\\\")
+                    # generate_imshow_from_sheet(A, True, n_rounds, filepath, normal=True)
+    # compute_meta_game_equilibrium(filepath,normal=True)
+    # generate_imshow_from_sheet(A, True, n_rounds, filepath, normal=False)
+    # generate_tree_from_sheet(A, n_rounds, filepath)
+    # for m in M:
+    # run_2_round_grid_search(D, T, M, A, delta, eps)
+    # run_n_rounds_extended_form(D, T, M, A, eps, n_rounds, initial=[(0,2),(0,0)])
     # run_1_round_normal_bar(A, T, False, M)
-    run_n_rounds_extended_form(D, T, M, A, eps, n_rounds, initial=([1,2,3],[1,2,3]), verbose=False)
+    # run_n_rounds_extended_form(D, T, M, A, eps, n_rounds, initial=([1,2,3],[1,2,3]), verbose=False)
     # make_bar_graph(filepath, uniform_firm=False)
-    # run_1_round_normal(A, T, M, initial=(1,15), reference=(15,29), eps=1e-7)
+    # run_1_round_normal_grid(A, T, M, reference=None, eps=eps)
+    # run_1_round_normal(A,T,M,initial=(10,10),reference=(10,20))
+    # reference_values = [(5,15), (20,16)]
+    # for ref_value in reference_values:
+    #     for m in M:
+    #         print("refernece value:", ref_value)
+    #         print("m", m)
+    # run_1_round_normal_grid(A, T, M, reference=ref_value, eps=1e-7)
     exit()

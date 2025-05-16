@@ -106,8 +106,8 @@ def get_cdf(w,idx): # sum probability mass up until and including idx
 
 if __name__ == "__main__":
 
-    T =100 # time steps
-    M = 6000#T**(1/4) # regularizer constant
+    T =400 # time steps
+    M = T**(1/4) #T**(1/4) # regularizer constant
     D = 50
 
     N = 8
@@ -122,10 +122,10 @@ if __name__ == "__main__":
         alpha_f_idx = np.random.randint(len(S_f))
         alpha_c_idx = np.random.randint(len(S_c))
 
-        # beta_f = [1 if i == beta_f_idx else 0 for i in range(len(S_f))]
-        # beta_c = [1 if i == beta_c_idx else 0 for i in range(len(S_c))]
-        beta_f = [1/len(S_f) for i in range(len(S_f))]
-        beta_c = [1/len(S_c) for i in range(len(S_c))]
+        beta_f = [1 if i == beta_f_idx else 0 for i in range(len(S_f))]
+        beta_c = [1 if i == beta_c_idx else 0 for i in range(len(S_c))]
+        # beta_f = [1/len(S_f) for i in range(len(S_f))]
+        # beta_c = [1/len(S_c) for i in range(len(S_c))]
         alpha_f = [1 if i == alpha_f_idx else 0 for i in range(len(S_f))]
         alpha_c = [1 if i == alpha_c_idx else 0 for i in range(len(S_c))]
 
